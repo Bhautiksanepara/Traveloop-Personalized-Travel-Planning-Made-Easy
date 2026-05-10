@@ -1,0 +1,300 @@
+{
+  "info": {
+    "name": "Traveloop API",
+    "_postman_id": "0b191af9-d84a-4a30-90a0-01f84a267a9c",
+    "description": "Postman collection for the Traveloop Express MVC backend.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:5000/api/v1" },
+    { "key": "accessToken", "value": "" },
+    { "key": "refreshToken", "value": "" },
+    { "key": "tripId", "value": "" },
+    { "key": "stopId", "value": "" },
+    { "key": "noteId", "value": "" },
+    { "key": "itemId", "value": "" },
+    { "key": "expenseId", "value": "" },
+    { "key": "publicToken", "value": "" },
+    { "key": "cityId", "value": "" },
+    { "key": "activityId", "value": "" },
+    { "key": "userId", "value": "" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Signup",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/signup",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"demo+api@traveloop.com\",\n  \"password\": \"password123\",\n  \"language\": \"en\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@traveloop.com\",\n  \"password\": \"password123\",\n  \"deviceLabel\": \"Postman\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Refresh",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/refresh",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Forgot Password",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "url": "{{baseUrl}}/auth/forgot-password",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"demo@traveloop.com\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Users",
+      "item": [
+        {
+          "name": "Get Me",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/users/me"
+          }
+        },
+        {
+          "name": "Saved Destinations",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/users/me/saved-destinations"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Cities and Activities",
+      "item": [
+        {
+          "name": "List Cities",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/cities?search=Paris"
+          }
+        },
+        {
+          "name": "City Activities",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/cities/{{cityId}}/activities"
+          }
+        },
+        {
+          "name": "List Activities",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/activities"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Trips",
+      "item": [
+        {
+          "name": "Create Trip",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/trips",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"My Summer Trip\",\n  \"description\": \"Demo trip\",\n  \"startDate\": \"2026-06-01\",\n  \"endDate\": \"2026-06-10\",\n  \"budgetLimit\": 2500\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Stop",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/stops",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"cityId\": \"{{cityId}}\",\n  \"arriveDate\": \"2026-06-01\",\n  \"departDate\": \"2026-06-03\",\n  \"orderIndex\": 10,\n  \"budgetForStop\": 700\n}"
+            }
+          }
+        },
+        {
+          "name": "Add Stop Activity",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/stops/{{stopId}}/activities",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"activityId\": \"{{activityId}}\",\n  \"scheduledTime\": \"10:00:00\",\n  \"orderIndex\": 10\n}"
+            }
+          }
+        },
+        {
+          "name": "Get Itinerary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/trips/{{tripId}}/itinerary"
+          }
+        },
+        {
+          "name": "Budget Summary",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/trips/{{tripId}}/budget-summary"
+          }
+        },
+        {
+          "name": "Create Expense",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/expenses",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"category\": \"transport\",\n  \"label\": \"Airport cab\",\n  \"amount\": 35,\n  \"expenseDate\": \"2026-06-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Packing Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/packing-items",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Passport\",\n  \"category\": \"documents\",\n  \"orderIndex\": 10\n}"
+            }
+          }
+        },
+        {
+          "name": "Create Note",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{accessToken}}" },
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "url": "{{baseUrl}}/trips/{{tripId}}/notes",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"content\": \"Check in after 2 PM\",\n  \"noteDate\": \"2026-06-01\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Share Trip",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/trips/{{tripId}}/share"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Public Trips",
+      "item": [
+        {
+          "name": "Get Public Trip",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/public/trips/{{publicToken}}"
+          }
+        },
+        {
+          "name": "Copy Public Trip",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/public/trips/{{publicToken}}/copy"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Admin",
+      "item": [
+        {
+          "name": "Overview",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/overview"
+          }
+        },
+        {
+          "name": "Users",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/users"
+          }
+        },
+        {
+          "name": "Trips",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/trips"
+          }
+        },
+        {
+          "name": "Top Cities",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{accessToken}}" }],
+            "url": "{{baseUrl}}/admin/analytics/cities"
+          }
+        }
+      ]
+    }
+  ]
+}
