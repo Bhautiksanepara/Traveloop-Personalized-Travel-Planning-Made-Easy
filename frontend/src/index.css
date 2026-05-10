@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@theme {
+  --color-brand-navy: #0f172a;
+  --color-brand-sky: #0ea5e9;
+  --color-brand-indigo: #6366f1;
+  --color-brand-cream: #fcfaf7;
+  --color-brand-slate: #64748b;
+  --color-bg-light: #fcfaf7;
+  
+  --font-sans: "Plus Jakarta Sans", "Inter", system-ui, sans-serif;
+}
+
+@layer base {
+  input[type="date"]::-webkit-calendar-picker-indicator {
+    background: transparent;
+    bottom: 0;
+    color: transparent;
+    cursor: pointer;
+    height: auto;
+    left: 0;
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: auto;
+  }
+  
+  body {
+    @apply bg-brand-cream text-brand-navy antialiased selection:bg-brand-sky/20;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@layer utilities {
+  .glass {
+    @apply backdrop-blur-md bg-white/70 border border-brand-navy/5 shadow-[0_10px_40px_-15px_rgba(15,23,42,0.1)];
+  }
+  
+  .glass-darker {
+    @apply backdrop-blur-lg bg-brand-navy/5 border border-brand-navy/10 shadow-xl;
+  }
+
+  .text-gradient {
+    @apply bg-clip-text text-transparent bg-gradient-to-r from-brand-navy via-brand-indigo to-brand-sky;
+  }
+
+  .bg-gradient-mesh {
+    background-color: #fcfaf7;
+    background-image: 
+      radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.08) 0px, transparent 50%),
+      radial-gradient(at 100% 0%, rgba(99, 102, 241, 0.08) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, rgba(14, 165, 233, 0.05) 0px, transparent 50%),
+      radial-gradient(at 0% 100%, rgba(99, 102, 241, 0.05) 0px, transparent 50%);
+  }
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-brand-cream;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-brand-slate/30 rounded-full hover:bg-brand-navy/20 transition-colors;
+}
