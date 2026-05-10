@@ -3,7 +3,17 @@ import { motion } from 'framer-motion';
 import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Plus, Trash2, Layout, MapPin, GripVertical, CalendarDays } from 'lucide-react';
+import {
+  Plus,
+  Trash2,
+  Layout,
+  MapPin,
+  GripVertical,
+  CalendarDays,
+  Clock3,
+  Wallet,
+  Image as ImageIcon
+} from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedButton } from '../../components/ui/AnimatedButton';
 import { activitiesApi, citiesApi, tripsApi } from '../../lib/api';
@@ -35,13 +45,44 @@ function formatTripDay(dateValue) {
   });
 }
 
+function formatActivityDuration(minutes) {
+  const value = Number(minutes || 0);
+
+  if (!value) {
+    return 'Flexible duration';
+  }
+
+  if (value < 60) {
+    return `${value} min`;
+  }
+
+  const hours = Math.floor(value / 60);
+  const remainingMinutes = value % 60;
+
+  if (!remainingMinutes) {
+    return `${hours} hr${hours > 1 ? 's' : ''}`;
+  }
+
+  return `${hours} hr ${remainingMinutes} min`;
+}
+
+function formatActivityCost(cost) {
+  const value = Number(cost || 0);
+  return value ? `$${value.toFixed(0)}` : 'Free / flexible';
+}
+
 function SortableStopCard({
   stop,
   selectedDate,
   activitySearch,
+  activityCategory,
   activityResults,
+  visibleActivityCount,
   onDateChange,
   onSearchChange,
+  onCategoryChange,
+  onShowMore,
+  onShowLess,
   onAddActivity,
   onDeleteActivity,
   onDeleteStop
@@ -52,6 +93,15 @@ function SortableStopCard({
     transition
   };
   const stopDates = getStopDates(stop.arriveDate, stop.departDate);
+  const availableCategories = useMemo(
+    () =>
+      Array.from(
+        new Set((activityResults || []).map((activity) => activity.category).filter(Boolean))
+      ).sort((left, right) => left.localeCompare(right)),
+    [activityResults]
+  );
+  const visibleActivities = activityResults.slice(0, visibleActivityCount);
+  const hasMoreActivities = activityResults.length > visibleActivityCount;
 
   return (
     <div ref={setNodeRef} style={style}>
@@ -84,6 +134,7 @@ function SortableStopCard({
             <CalendarDays size={16} className="text-brand-indigo" />
             <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Assign activities to a trip day</p>
           </div>
+
           <div className="flex flex-wrap gap-2">
             {stopDates.map((date) => (
               <button
@@ -113,21 +164,80 @@ function SortableStopCard({
             </span>
           </div>
 
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => onCategoryChange(stop.id, 'all')}
+              className={`rounded-2xl border px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
+                activityCategory === 'all'
+                  ? 'border-brand-indigo bg-brand-indigo text-white shadow-lg'
+                  : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
+              }`}
+            >
+              All
+            </button>
+            {availableCategories.map((category) => (
+              <button
+                key={category}
+                type="button"
+                onClick={() => onCategoryChange(stop.id, category)}
+                className={`rounded-2xl border px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
+                  activityCategory === category
+                    ? 'border-brand-indigo bg-brand-indigo text-white shadow-lg'
+                    : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
+                }`}
+              >
+                {category}
+              </button>
+            ))}
+          </div>
+
           <div className="grid gap-3">
-            {activityResults.map((activity) => {
+            {visibleActivities.map((activity) => {
               const alreadyAdded = stop.activities?.some((item) => item.activityId === activity.id);
 
               return (
-                <div key={activity.id} className="rounded-2xl border border-brand-navy/10 bg-brand-navy/[0.02] p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{activity.name}</h4>
-                    <p className="text-xs font-bold uppercase tracking-widest text-brand-slate">
-                      {activity.category} • estimated {Number(activity.estimatedCost || 0)}
-                    </p>
+                <div
+                  key={activity.id}
+                  className="rounded-[28px] border border-brand-navy/10 bg-brand-navy/[0.02] p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
+                >
+                  <div className="flex items-start gap-4 min-w-0">
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-brand-navy/10 bg-white">
+                      {activity.imageUrl ? (
+                        <img src={activity.imageUrl} alt={activity.name} className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-brand-slate">
+                          <ImageIcon size={22} />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{activity.name}</h4>
+                        <span className="rounded-full bg-brand-sky/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-sky">
+                          {activity.category}
+                        </span>
+                      </div>
+                      {activity.description ? (
+                        <p className="text-sm font-medium text-brand-slate line-clamp-2">{activity.description}</p>
+                      ) : null}
+                      <div className="flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-widest text-brand-slate">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock3 size={14} className="text-brand-indigo" />
+                          {formatActivityDuration(activity.durationMinutes)}
+                        </span>
+                        <span className="inline-flex items-center gap-1.5">
+                          <Wallet size={14} className="text-brand-indigo" />
+                          {formatActivityCost(activity.estimatedCost)}
+                        </span>
+                      </div>
+                    </div>
                   </div>
+
                   <AnimatedButton
                     onClick={() => onAddActivity(stop, activity)}
-                    className="px-4 py-3 rounded-2xl"
+                    className="px-4 py-3 rounded-2xl lg:min-w-[160px]"
                     disabled={alreadyAdded}
                   >
                     {alreadyAdded ? 'Added' : 'Add Activity'}
@@ -135,8 +245,37 @@ function SortableStopCard({
                 </div>
               );
             })}
+
             {!activityResults.length ? (
-              <p className="text-sm font-bold text-brand-slate">Search to load activities for this stop.</p>
+              <p className="text-sm font-bold text-brand-slate">No activities match this search or category yet.</p>
+            ) : null}
+
+            {activityResults.length ? (
+              <div className="flex items-center justify-between gap-3 pt-1">
+                <p className="text-[11px] font-black uppercase tracking-widest text-brand-slate">
+                  Showing {Math.min(visibleActivityCount, activityResults.length)} of {activityResults.length} activities
+                </p>
+                <div className="flex gap-2">
+                  {visibleActivityCount > 6 ? (
+                    <button
+                      type="button"
+                      onClick={() => onShowLess(stop.id)}
+                      className="rounded-2xl border border-brand-navy/10 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-brand-slate"
+                    >
+                      Show Less
+                    </button>
+                  ) : null}
+                  {hasMoreActivities ? (
+                    <button
+                      type="button"
+                      onClick={() => onShowMore(stop.id)}
+                      className="rounded-2xl border border-brand-indigo/20 bg-brand-indigo/5 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-brand-indigo"
+                    >
+                      Show More
+                    </button>
+                  ) : null}
+                </div>
+              </div>
             ) : null}
           </div>
 
@@ -148,7 +287,7 @@ function SortableStopCard({
                   <div>
                     <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{item.activity?.name}</h4>
                     <p className="text-xs font-bold uppercase tracking-widest text-brand-slate">
-                      {(item.scheduledDate && formatTripDay(item.scheduledDate.slice(0, 10))) || 'Flexible day'} • {item.scheduledTime || 'Flexible time'}
+                      {(item.scheduledDate && formatTripDay(item.scheduledDate.slice(0, 10))) || 'Flexible day'} - {item.scheduledTime || 'Flexible time'}
                     </p>
                   </div>
                   <button
@@ -178,7 +317,10 @@ export default function ItineraryBuilderPage() {
     departDate: ''
   });
   const [activitySearchByStop, setActivitySearchByStop] = useState({});
+  const [activityCategoryByStop, setActivityCategoryByStop] = useState({});
   const [activityResultsByStop, setActivityResultsByStop] = useState({});
+  const [allActivitiesByStop, setAllActivitiesByStop] = useState({});
+  const [visibleActivityCountByStop, setVisibleActivityCountByStop] = useState({});
   const [selectedDateByStop, setSelectedDateByStop] = useState({});
   const [error, setError] = useState('');
 
@@ -208,7 +350,79 @@ export default function ItineraryBuilderPage() {
     });
   }, [trip]);
 
+  useEffect(() => {
+    if (!trip?.stops?.length) {
+      setAllActivitiesByStop({});
+      setActivityResultsByStop({});
+      setActivityCategoryByStop({});
+      setVisibleActivityCountByStop({});
+      return;
+    }
+
+    let ignore = false;
+
+    const loadActivitiesForStops = async () => {
+      const responses = await Promise.all(
+        trip.stops.map(async (stop) => {
+          const response = await activitiesApi.list({ cityId: stop.cityId, limit: 50 });
+          return {
+            stopId: stop.id,
+            activities: response.data || []
+          };
+        })
+      );
+
+      if (ignore) {
+        return;
+      }
+
+      const allByStop = {};
+      const visibleByStop = {};
+      const categoryByStop = {};
+      const visibleCountByStop = {};
+
+      responses.forEach(({ stopId, activities }) => {
+        allByStop[stopId] = activities;
+        visibleByStop[stopId] = activities;
+        categoryByStop[stopId] = 'all';
+        visibleCountByStop[stopId] = 6;
+      });
+
+      setAllActivitiesByStop(allByStop);
+      setActivityResultsByStop(visibleByStop);
+      setActivityCategoryByStop(categoryByStop);
+      setVisibleActivityCountByStop(visibleCountByStop);
+    };
+
+    loadActivitiesForStops().catch(() => {
+      if (!ignore) {
+        setError('Failed to load available activities for one or more stops.');
+      }
+    });
+
+    return () => {
+      ignore = true;
+    };
+  }, [trip]);
+
   const orderedStopIds = useMemo(() => (trip?.stops || []).map((stop) => stop.id), [trip]);
+
+  const applyActivityFilters = (stopId, searchValue, categoryValue) => {
+    const normalizedSearch = (searchValue || '').trim().toLowerCase();
+    const normalizedCategory = categoryValue || 'all';
+    const sourceActivities = allActivitiesByStop[stopId] || [];
+
+    return sourceActivities.filter((activity) => {
+      const matchesSearch =
+        !normalizedSearch ||
+        activity.name.toLowerCase().includes(normalizedSearch) ||
+        activity.category.toLowerCase().includes(normalizedSearch) ||
+        (activity.description || '').toLowerCase().includes(normalizedSearch);
+      const matchesCategory = normalizedCategory === 'all' || activity.category === normalizedCategory;
+
+      return matchesSearch && matchesCategory;
+    });
+  };
 
   const searchCities = async (value) => {
     setCitySearch(value);
@@ -284,17 +498,16 @@ export default function ItineraryBuilderPage() {
 
   const searchActivitiesForStop = async (stop, value) => {
     setActivitySearchByStop((current) => ({ ...current, [stop.id]: value }));
-
-    if (value.trim().length < 1) {
-      setActivityResultsByStop((current) => ({ ...current, [stop.id]: [] }));
-      return;
-    }
-
-    const response = await activitiesApi.list({ cityId: stop.cityId, limit: 20 });
-    const filtered = (response.data || []).filter((activity) =>
-      activity.name.toLowerCase().includes(value.toLowerCase())
-    );
+    const filtered = applyActivityFilters(stop.id, value, activityCategoryByStop[stop.id]);
     setActivityResultsByStop((current) => ({ ...current, [stop.id]: filtered }));
+    setVisibleActivityCountByStop((current) => ({ ...current, [stop.id]: 6 }));
+  };
+
+  const filterActivitiesByCategory = (stopId, category) => {
+    setActivityCategoryByStop((current) => ({ ...current, [stopId]: category }));
+    const filtered = applyActivityFilters(stopId, activitySearchByStop[stopId], category);
+    setActivityResultsByStop((current) => ({ ...current, [stopId]: filtered }));
+    setVisibleActivityCountByStop((current) => ({ ...current, [stopId]: 6 }));
   };
 
   const addActivityToStop = async (stop, activity) => {
@@ -413,11 +626,26 @@ export default function ItineraryBuilderPage() {
                   stop={stop}
                   selectedDate={selectedDateByStop[stop.id]}
                   activitySearch={activitySearchByStop[stop.id] || ''}
+                  activityCategory={activityCategoryByStop[stop.id] || 'all'}
                   activityResults={activityResultsByStop[stop.id] || []}
+                  visibleActivityCount={visibleActivityCountByStop[stop.id] || 6}
                   onDateChange={(stopId, date) =>
                     setSelectedDateByStop((current) => ({ ...current, [stopId]: date }))
                   }
                   onSearchChange={searchActivitiesForStop}
+                  onCategoryChange={filterActivitiesByCategory}
+                  onShowMore={(stopId) =>
+                    setVisibleActivityCountByStop((current) => ({
+                      ...current,
+                      [stopId]: (current[stopId] || 6) + 6
+                    }))
+                  }
+                  onShowLess={(stopId) =>
+                    setVisibleActivityCountByStop((current) => ({
+                      ...current,
+                      [stopId]: 6
+                    }))
+                  }
                   onAddActivity={addActivityToStop}
                   onDeleteActivity={deleteActivityFromStop}
                   onDeleteStop={deleteStop}
