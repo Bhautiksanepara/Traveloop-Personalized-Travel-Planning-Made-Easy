@@ -58,6 +58,30 @@ export default function PackingListPage() {
     return items.filter((item) => item.name.toLowerCase().includes(searchQuery.toLowerCase()));
   }, [items, searchQuery]);
 
+  const visibleCategories = useMemo(() => {
+    const categoryMap = new Map();
+    const defaultCategoryMap = new Map(CATEGORIES.map((category) => [category.id, category]));
+
+    filteredItems.forEach((item) => {
+      const categoryId = item.category || 'other';
+      const existingCategory = categoryMap.get(categoryId);
+      if (existingCategory) {
+        existingCategory.items.push(item);
+        return;
+      }
+
+      const defaultCategory = defaultCategoryMap.get(categoryId);
+      categoryMap.set(categoryId, {
+        id: categoryId,
+        label: defaultCategory?.label || categoryId.replace(/(^|\s)\S/g, (match) => match.toUpperCase()),
+        icon: defaultCategory?.icon || Globe,
+        items: [item]
+      });
+    });
+
+    return Array.from(categoryMap.values());
+  }, [filteredItems]);
+
   const packedCount = items.filter((i) => i.isPacked).length;
   const progress = items.length ? (packedCount / items.length) * 100 : 0;
 
@@ -131,44 +155,50 @@ export default function PackingListPage() {
       {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-500">{error}</div> : null}
 
       <div className="space-y-10">
-        {CATEGORIES.map((cat) => {
-          const categoryItems = filteredItems.filter((i) => i.category === cat.id);
-          const packedInCategory = categoryItems.filter((i) => i.isPacked).length;
+        {visibleCategories.length ? (
+          visibleCategories.map((cat) => {
+            const categoryItems = cat.items;
+            const packedInCategory = categoryItems.filter((i) => i.isPacked).length;
 
-          return (
-            <div key={cat.id} className="space-y-4">
-              <div className="flex items-center justify-between border-b-2 border-brand-navy/5 pb-2 px-1">
-                <div className="flex items-center gap-3">
-                  <cat.icon size={18} className="text-brand-indigo" />
-                  <h3 className="text-lg font-black text-brand-navy tracking-tight uppercase">{cat.label}</h3>
+            return (
+              <div key={cat.id} className="space-y-4">
+                <div className="flex items-center justify-between border-b-2 border-brand-navy/5 pb-2 px-1">
+                  <div className="flex items-center gap-3">
+                    <cat.icon size={18} className="text-brand-indigo" />
+                    <h3 className="text-lg font-black text-brand-navy tracking-tight uppercase">{cat.label}</h3>
+                  </div>
+                  <span className="text-xs font-black text-brand-slate uppercase tracking-widest">{packedInCategory}/{categoryItems.length}</span>
                 </div>
-                <span className="text-xs font-black text-brand-slate uppercase tracking-widest">{packedInCategory}/{categoryItems.length}</span>
-              </div>
 
-              <div className="grid gap-3">
-                <AnimatePresence mode="popLayout">
-                  {categoryItems.map((item) => (
-                    <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} layout>
-                      <div onClick={() => toggleItem(item)} className={cn('flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer group', item.isPacked ? 'bg-brand-indigo/5 border-brand-indigo/10 opacity-70' : 'bg-white border-brand-navy/5 hover:border-brand-indigo/20 shadow-sm')}>
-                        <div className={cn('w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all', item.isPacked ? 'bg-brand-indigo border-brand-indigo text-white' : 'border-brand-navy/10 group-hover:border-brand-indigo/30')}>
-                          {item.isPacked && <Check size={16} />}
+                <div className="grid gap-3">
+                  <AnimatePresence mode="popLayout">
+                    {categoryItems.map((item) => (
+                      <motion.div key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.95 }} layout>
+                        <div onClick={() => toggleItem(item)} className={cn('flex items-center gap-4 p-4 rounded-2xl border-2 transition-all cursor-pointer group', item.isPacked ? 'bg-brand-indigo/5 border-brand-indigo/10 opacity-70' : 'bg-white border-brand-navy/5 hover:border-brand-indigo/20 shadow-sm')}>
+                          <div className={cn('w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all', item.isPacked ? 'bg-brand-indigo border-brand-indigo text-white' : 'border-brand-navy/10 group-hover:border-brand-indigo/30')}>
+                            {item.isPacked && <Check size={16} />}
+                          </div>
+
+                          <span className={cn('flex-1 font-bold text-brand-navy transition-all', item.isPacked && 'line-through text-brand-slate')}>
+                            {item.name}
+                          </span>
+
+                          <button onClick={(e) => { e.stopPropagation(); removeItem(item.id); }} className="p-2 text-brand-slate hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer">
+                            <Trash2 size={16} />
+                          </button>
                         </div>
-
-                        <span className={cn('flex-1 font-bold text-brand-navy transition-all', item.isPacked && 'line-through text-brand-slate')}>
-                          {item.name}
-                        </span>
-
-                        <button onClick={(e) => { e.stopPropagation(); removeItem(item.id); }} className="p-2 text-brand-slate hover:text-red-500 hover:bg-red-50 rounded-xl transition-all opacity-0 group-hover:opacity-100 cursor-pointer">
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })
+        ) : (
+          <div className="rounded-2xl border border-brand-navy/10 bg-white/80 p-8 text-center text-brand-slate font-bold">
+            No packing items match this search yet. Add items to get started.
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 pt-6">

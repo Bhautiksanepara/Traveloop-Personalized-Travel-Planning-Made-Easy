@@ -12,7 +12,8 @@ import {
   CalendarDays,
   Clock3,
   Wallet,
-  Image as ImageIcon
+  Image as ImageIcon,
+  ChevronDown
 } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedButton } from '../../components/ui/AnimatedButton';
@@ -87,6 +88,7 @@ function SortableStopCard({
   onDeleteActivity,
   onDeleteStop
 }) {
+  const [isExpanded, setIsExpanded] = useState(true);
   const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: stop.id });
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -124,184 +126,196 @@ function SortableStopCard({
               </p>
             </div>
           </div>
-          <button onClick={() => onDeleteStop(stop.id)} className="p-3 rounded-xl bg-red-50 text-red-500">
-            <Trash2 size={18} />
-          </button>
-        </div>
-
-        <div className="space-y-4 border-t border-brand-navy/5 pt-6">
           <div className="flex items-center gap-2">
-            <CalendarDays size={16} className="text-brand-indigo" />
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Assign activities to a trip day</p>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
-            {stopDates.map((date) => (
-              <button
-                key={date}
-                type="button"
-                onClick={() => onDateChange(stop.id, date)}
-                className={`rounded-2xl px-4 py-2.5 border text-xs font-black uppercase tracking-widest transition-all ${
-                  selectedDate === date
-                    ? 'border-brand-navy bg-brand-navy text-white shadow-lg'
-                    : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
-                }`}
-              >
-                {formatTripDay(date)}
-              </button>
-            ))}
-          </div>
-
-          <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
-            <input
-              value={activitySearch}
-              onChange={(event) => onSearchChange(stop, event.target.value)}
-              placeholder={`Search ${stop.city?.name} activities...`}
-              className="w-full bg-white border-2 border-brand-navy/5 rounded-2xl py-4 px-4 text-brand-navy font-bold focus:outline-none focus:border-brand-sky/30 transition-all shadow-sm"
-            />
-            <span className="text-xs font-black uppercase tracking-widest text-brand-sky">
-              {selectedDate ? formatTripDay(selectedDate) : 'Pick a day'}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap gap-2">
             <button
               type="button"
-              onClick={() => onCategoryChange(stop.id, 'all')}
-              className={`rounded-2xl border px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
-                activityCategory === 'all'
-                  ? 'border-brand-indigo bg-brand-indigo text-white shadow-lg'
-                  : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
-              }`}
+              onClick={() => setIsExpanded((current) => !current)}
+              className="inline-flex items-center gap-2 rounded-2xl border border-brand-navy/10 bg-white px-4 py-3 text-[11px] font-black uppercase tracking-widest text-brand-navy transition-all hover:border-brand-indigo/20"
             >
-              All
+              <span>{isExpanded ? 'Hide places' : 'Show places'}</span>
+              <ChevronDown size={16} className={`transition-transform ${isExpanded ? 'rotate-180' : 'rotate-0'}`} />
             </button>
-            {availableCategories.map((category) => (
+            <button onClick={() => onDeleteStop(stop.id)} className="p-3 rounded-xl bg-red-50 text-red-500">
+              <Trash2 size={18} />
+            </button>
+          </div>
+        </div>
+
+        {isExpanded ? (
+          <div className="space-y-4 border-t border-brand-navy/5 pt-6">
+            <div className="flex items-center gap-2">
+              <CalendarDays size={16} className="text-brand-indigo" />
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Assign activities to a trip day</p>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              {stopDates.map((date) => (
+                <button
+                  key={date}
+                  type="button"
+                  onClick={() => onDateChange(stop.id, date)}
+                  className={`rounded-2xl px-4 py-2.5 border text-xs font-black uppercase tracking-widest transition-all ${
+                    selectedDate === date
+                      ? 'border-brand-navy bg-brand-navy text-white shadow-lg'
+                      : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
+                  }`}
+                >
+                  {formatTripDay(date)}
+                </button>
+              ))}
+            </div>
+
+            <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
+              <input
+                value={activitySearch}
+                onChange={(event) => onSearchChange(stop, event.target.value)}
+                placeholder={`Search ${stop.city?.name} activities...`}
+                className="w-full bg-white border-2 border-brand-navy/5 rounded-2xl py-4 px-4 text-brand-navy font-bold focus:outline-none focus:border-brand-sky/30 transition-all shadow-sm"
+              />
+              <span className="text-xs font-black uppercase tracking-widest text-brand-sky">
+                {selectedDate ? formatTripDay(selectedDate) : 'Pick a day'}
+              </span>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
               <button
-                key={category}
                 type="button"
-                onClick={() => onCategoryChange(stop.id, category)}
+                onClick={() => onCategoryChange(stop.id, 'all')}
                 className={`rounded-2xl border px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
-                  activityCategory === category
+                  activityCategory === 'all'
                     ? 'border-brand-indigo bg-brand-indigo text-white shadow-lg'
                     : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
                 }`}
               >
-                {category}
+                All
               </button>
-            ))}
-          </div>
-
-          <div className="grid gap-3">
-            {visibleActivities.map((activity) => {
-              const alreadyAdded = stop.activities?.some((item) => item.activityId === activity.id);
-
-              return (
-                <div
-                  key={activity.id}
-                  className="rounded-[28px] border border-brand-navy/10 bg-brand-navy/[0.02] p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
+              {availableCategories.map((category) => (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => onCategoryChange(stop.id, category)}
+                  className={`rounded-2xl border px-4 py-2 text-[11px] font-black uppercase tracking-widest transition-all ${
+                    activityCategory === category
+                      ? 'border-brand-indigo bg-brand-indigo text-white shadow-lg'
+                      : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
+                  }`}
                 >
-                  <div className="flex items-start gap-4 min-w-0">
-                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-brand-navy/10 bg-white">
-                      {activity.imageUrl ? (
-                        <img src={activity.imageUrl} alt={activity.name} className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-brand-slate">
-                          <ImageIcon size={22} />
-                        </div>
-                      )}
-                    </div>
+                  {category}
+                </button>
+              ))}
+            </div>
 
-                    <div className="min-w-0 space-y-2">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{activity.name}</h4>
-                        <span className="rounded-full bg-brand-sky/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-sky">
-                          {activity.category}
-                        </span>
-                      </div>
-                      {activity.description ? (
-                        <p className="text-sm font-medium text-brand-slate line-clamp-2">{activity.description}</p>
-                      ) : null}
-                      <div className="flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-widest text-brand-slate">
-                        <span className="inline-flex items-center gap-1.5">
-                          <Clock3 size={14} className="text-brand-indigo" />
-                          {formatActivityDuration(activity.durationMinutes)}
-                        </span>
-                        <span className="inline-flex items-center gap-1.5">
-                          <Wallet size={14} className="text-brand-indigo" />
-                          {formatActivityCost(activity.estimatedCost)}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
+            <div className="grid gap-3">
+              {visibleActivities.map((activity) => {
+                const alreadyAdded = stop.activities?.some((item) => item.activityId === activity.id);
 
-                  <AnimatedButton
-                    onClick={() => onAddActivity(stop, activity)}
-                    className="px-4 py-3 rounded-2xl lg:min-w-[160px]"
-                    disabled={alreadyAdded}
+                return (
+                  <div
+                    key={activity.id}
+                    className="rounded-[28px] border border-brand-navy/10 bg-brand-navy/[0.02] p-4 md:p-5 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4"
                   >
-                    {alreadyAdded ? 'Added' : 'Add Activity'}
-                  </AnimatedButton>
+                    <div className="flex items-start gap-4 min-w-0">
+                      <div className="h-20 w-20 shrink-0 overflow-hidden rounded-2xl border border-brand-navy/10 bg-white">
+                        {activity.imageUrl ? (
+                          <img src={activity.imageUrl} alt={activity.name} className="h-full w-full object-cover" />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-brand-slate">
+                            <ImageIcon size={22} />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{activity.name}</h4>
+                          <span className="rounded-full bg-brand-sky/10 px-3 py-1 text-[10px] font-black uppercase tracking-[0.2em] text-brand-sky">
+                            {activity.category}
+                          </span>
+                        </div>
+                        {activity.description ? (
+                          <p className="text-sm font-medium text-brand-slate line-clamp-2">{activity.description}</p>
+                        ) : null}
+                        <div className="flex flex-wrap gap-3 text-[11px] font-black uppercase tracking-widest text-brand-slate">
+                          <span className="inline-flex items-center gap-1.5">
+                            <Clock3 size={14} className="text-brand-indigo" />
+                            {formatActivityDuration(activity.durationMinutes)}
+                          </span>
+                          <span className="inline-flex items-center gap-1.5">
+                            <Wallet size={14} className="text-brand-indigo" />
+                            {formatActivityCost(activity.estimatedCost)}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <AnimatedButton
+                      onClick={() => onAddActivity(stop, activity)}
+                      className="px-4 py-3 rounded-2xl lg:min-w-[160px]"
+                      disabled={alreadyAdded}
+                    >
+                      {alreadyAdded ? 'Added' : 'Add Activity'}
+                    </AnimatedButton>
+                  </div>
+                );
+              })}
+
+              {!activityResults.length ? (
+                <p className="text-sm font-bold text-brand-slate">No activities match this search or category yet.</p>
+              ) : null}
+
+              {activityResults.length ? (
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <p className="text-[11px] font-black uppercase tracking-widest text-brand-slate">
+                    Showing {Math.min(visibleActivityCount, activityResults.length)} of {activityResults.length} activities
+                  </p>
+                  <div className="flex gap-2">
+                    {visibleActivityCount > 6 ? (
+                      <button
+                        type="button"
+                        onClick={() => onShowLess(stop.id)}
+                        className="rounded-2xl border border-brand-navy/10 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-brand-slate"
+                      >
+                        Show Less
+                      </button>
+                    ) : null}
+                    {hasMoreActivities ? (
+                      <button
+                        type="button"
+                        onClick={() => onShowMore(stop.id)}
+                        className="rounded-2xl border border-brand-indigo/20 bg-brand-indigo/5 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-brand-indigo"
+                      >
+                        Show More
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
-              );
-            })}
+              ) : null}
+            </div>
 
-            {!activityResults.length ? (
-              <p className="text-sm font-bold text-brand-slate">No activities match this search or category yet.</p>
-            ) : null}
-
-            {activityResults.length ? (
-              <div className="flex items-center justify-between gap-3 pt-1">
-                <p className="text-[11px] font-black uppercase tracking-widest text-brand-slate">
-                  Showing {Math.min(visibleActivityCount, activityResults.length)} of {activityResults.length} activities
-                </p>
-                <div className="flex gap-2">
-                  {visibleActivityCount > 6 ? (
+            {stop.activities?.length ? (
+              <div className="space-y-3 border-t border-brand-navy/5 pt-6">
+                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Planned for this stop</p>
+                {stop.activities.map((item) => (
+                  <div key={item.id} className="rounded-2xl border border-brand-navy/10 bg-white p-4 flex items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{item.activity?.name}</h4>
+                      <p className="text-xs font-bold uppercase tracking-widest text-brand-slate">
+                        {(item.scheduledDate && formatTripDay(item.scheduledDate.slice(0, 10))) || 'Flexible day'} - {item.scheduledTime || 'Flexible time'}
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      onClick={() => onShowLess(stop.id)}
-                      className="rounded-2xl border border-brand-navy/10 bg-white px-4 py-2 text-[11px] font-black uppercase tracking-widest text-brand-slate"
+                      onClick={() => onDeleteActivity(stop.id, item.id)}
+                      className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase tracking-widest text-red-600"
                     >
-                      Show Less
+                      Remove
                     </button>
-                  ) : null}
-                  {hasMoreActivities ? (
-                    <button
-                      type="button"
-                      onClick={() => onShowMore(stop.id)}
-                      className="rounded-2xl border border-brand-indigo/20 bg-brand-indigo/5 px-4 py-2 text-[11px] font-black uppercase tracking-widest text-brand-indigo"
-                    >
-                      Show More
-                    </button>
-                  ) : null}
-                </div>
+                  </div>
+                ))}
               </div>
             ) : null}
           </div>
-
-          {stop.activities?.length ? (
-            <div className="space-y-3 border-t border-brand-navy/5 pt-6">
-              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Planned for this stop</p>
-              {stop.activities.map((item) => (
-                <div key={item.id} className="rounded-2xl border border-brand-navy/10 bg-white p-4 flex items-center justify-between gap-3">
-                  <div>
-                    <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{item.activity?.name}</h4>
-                    <p className="text-xs font-bold uppercase tracking-widest text-brand-slate">
-                      {(item.scheduledDate && formatTripDay(item.scheduledDate.slice(0, 10))) || 'Flexible day'} - {item.scheduledTime || 'Flexible time'}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => onDeleteActivity(stop.id, item.id)}
-                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase tracking-widest text-red-600"
-                  >
-                    Remove
-                  </button>
-                </div>
-              ))}
-            </div>
-          ) : null}
-        </div>
+        ) : null}
       </GlassCard>
     </div>
   );

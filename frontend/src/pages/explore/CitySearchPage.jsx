@@ -20,7 +20,8 @@ export default function CitySearchPage() {
   const [sortBy, setSortBy] = useState('popularity');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const { tripId, trip } = useResolvedTrip();
+  const [addingCityId, setAddingCityId] = useState('');
+  const { tripId, trip, loading: tripLoading, setTrip } = useResolvedTrip();
 
   useEffect(() => {
     let ignore = false;
@@ -62,13 +63,37 @@ export default function CitySearchPage() {
       return;
     }
 
-    await tripsApi.addStop(tripId, {
-      cityId,
-      arriveDate: trip.startDate.slice(0, 10),
-      departDate: trip.endDate.slice(0, 10),
-      orderIndex: (trip.stops?.length || 0) * 10 + 10
-    });
-    setError('');
+    if (!trip.startDate || !trip.endDate) {
+      setError('Trip details are still loading. Please wait a moment and try again.');
+      return;
+    }
+
+    const nextOrderIndex = (trip.stops || []).reduce((maxIndex, stop) => {
+      return Math.max(maxIndex, stop.orderIndex || 0);
+    }, 0) + 10;
+
+    try {
+      setError('');
+      setAddingCityId(cityId);
+      const response = await tripsApi.addStop(tripId, {
+        cityId,
+        arriveDate: trip.startDate.slice(0, 10),
+        departDate: trip.endDate.slice(0, 10),
+        orderIndex: nextOrderIndex
+      });
+      setTrip((currentTrip) =>
+        currentTrip
+          ? {
+              ...currentTrip,
+              stops: [...(currentTrip.stops || []), response.data]
+            }
+          : currentTrip
+      );
+    } catch (requestError) {
+      setError(requestError.message || 'Failed to add the city to the trip.');
+    } finally {
+      setAddingCityId('');
+    }
   };
 
   const saveDestination = async (cityId) => {
@@ -172,9 +197,14 @@ export default function CitySearchPage() {
                   </div>
 
                   <div className="p-10 border-l border-brand-navy/5 flex flex-col justify-center gap-4 min-w-[240px] bg-brand-navy/[0.01]">
-                    <AnimatedButton onClick={() => addCityToTrip(dest.id)} className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] bg-brand-navy shadow-xl shadow-brand-navy/20 rounded-2xl group/btn">
+                    <AnimatedButton
+                      type="button"
+                      disabled={!trip?.id || tripLoading || addingCityId === dest.id}
+                      onClick={() => addCityToTrip(dest.id)}
+                      className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] bg-brand-navy shadow-xl shadow-brand-navy/20 rounded-2xl group/btn"
+                    >
                       <span className="flex items-center justify-center gap-2">
-                        Add to Trip <Plus size={16} className="group-hover/btn:rotate-90 transition-transform" />
+                        {addingCityId === dest.id ? 'Adding...' : 'Add to Trip'} <Plus size={16} className="group-hover/btn:rotate-90 transition-transform" />
                       </span>
                     </AnimatedButton>
                     <AnimatedButton variant="secondary" onClick={() => saveDestination(dest.id)} className="w-full py-5 text-[11px] font-black uppercase tracking-[0.2em] border-2 border-brand-navy/10 text-brand-navy hover:bg-brand-navy/5 rounded-2xl">

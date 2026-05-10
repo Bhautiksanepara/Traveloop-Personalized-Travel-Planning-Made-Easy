@@ -72,6 +72,20 @@ const listSavedDestinations = async (userId, query) => {
 };
 
 const addSavedDestination = async (userId, cityId) => {
+  const existing = await prisma.savedDestination.findFirst({
+    where: {
+      userId,
+      cityId
+    },
+    include: {
+      city: true
+    }
+  });
+
+  if (existing) {
+    return existing;
+  }
+
   return prisma.savedDestination.create({
     data: {
       userId,
