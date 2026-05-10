@@ -2,7 +2,7 @@ const express = require("express");
 const userController = require("../controllers/userController");
 const validate = require("../middlewares/validate");
 const { requireAuth } = require("../middlewares/auth");
-const { z } = require("../validators/commonValidators");
+const { z, idSchema } = require("../validators/commonValidators");
 const {
   updateProfileSchema,
   savedDestinationSchema,
@@ -21,7 +21,7 @@ router.get("/me/saved-destinations", validate(savedDestinationQuerySchema, "quer
 router.post("/me/saved-destinations", validate(savedDestinationSchema), userController.addSavedDestination);
 router.delete(
   "/me/saved-destinations/:cityId",
-  validate(z.object({ cityId: z.string().uuid() }), "params"),
+  validate(z.object({ cityId: idSchema }), "params"),
   userController.removeSavedDestination
 );
 

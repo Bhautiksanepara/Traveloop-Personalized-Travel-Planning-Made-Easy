@@ -16,6 +16,7 @@ let refreshToken = "";
 let tripId = "";
 let stopId = "";
 let cityId = "";
+let activityId = "";
 
 const ensureAuthTables = async () => {
   await prisma.$executeRawUnsafe(`
@@ -53,6 +54,25 @@ const ensureAuthTables = async () => {
         ON DELETE CASCADE ON UPDATE CASCADE
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
   `);
+
+  const scheduledDateColumn = await prisma.$queryRawUnsafe(`
+    SELECT COLUMN_NAME
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE()
+      AND TABLE_NAME = 'stop_activities'
+      AND COLUMN_NAME = 'scheduled_date'
+  `);
+
+  if (!scheduledDateColumn.length) {
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE stop_activities
+        ADD COLUMN scheduled_date DATE NULL AFTER activity_id
+    `);
+    await prisma.$executeRawUnsafe(`
+      CREATE INDEX idx_stop_act_date
+      ON stop_activities (stop_id, scheduled_date)
+    `);
+  }
 };
 
 const cleanup = async () => {
@@ -107,6 +127,11 @@ beforeAll(async () => {
   });
 
   cityId = cities[0]?.id || "";
+  const activity = await prisma.activity.findFirst({
+    where: { cityId },
+    orderBy: { createdAt: "asc" }
+  });
+  activityId = activity?.id || "";
 });
 
 afterAll(async () => {
@@ -255,6 +280,31 @@ describe("Traveloop API integration", () => {
     expect(response.body.data.trip.id).toBe(tripId);
     expect(Array.isArray(response.body.data.days)).toBe(true);
     expect(response.body.data.days.length).toBeGreaterThan(0);
+  });
+
+  it("assigns a stop activity to an exact scheduled day", async () => {
+    const createResponse = await request(app)
+      .post(`/api/v1/trips/${tripId}/stops/${stopId}/activities`)
+      .set("Authorization", `Bearer ${accessToken}`)
+      .send({
+        activityId,
+        scheduledDate: "2026-07-02",
+        orderIndex: 10
+      });
+
+    expect(createResponse.statusCode).toBe(201);
+    expect(createResponse.body.success).toBe(true);
+
+    const itineraryResponse = await request(app)
+      .get(`/api/v1/trips/${tripId}/itinerary`)
+      .set("Authorization", `Bearer ${accessToken}`);
+
+    expect(itineraryResponse.statusCode).toBe(200);
+    const julySecond = itineraryResponse.body.data.days.find((day) => day.date === "2026-07-02");
+    const julyFirst = itineraryResponse.body.data.days.find((day) => day.date === "2026-07-01");
+    expect(julySecond.activities.length).toBeGreaterThan(0);
+    expect(julySecond.activities[0].scheduledDate).toBe("2026-07-02");
+    expect(julyFirst.activities).toHaveLength(0);
   });
 
   it("returns a trip list containing the created trip", async () => {

@@ -1,4 +1,4 @@
-const { z, paginationSchema } = require("./commonValidators");
+const { z, paginationSchema, idSchema } = require("./commonValidators");
 
 const updateProfileSchema = z
   .object({
@@ -12,7 +12,7 @@ const updateProfileSchema = z
   });
 
 const savedDestinationSchema = z.object({
-  cityId: z.string().uuid()
+  cityId: idSchema
 });
 
 const savedDestinationQuerySchema = paginationSchema;

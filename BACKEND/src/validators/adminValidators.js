@@ -1,4 +1,4 @@
-const { z, paginationSchema } = require("./commonValidators");
+const { z, paginationSchema, idSchema } = require("./commonValidators");
 
 const userQuerySchema = paginationSchema.extend({
   search: z.string().optional()
@@ -18,7 +18,7 @@ const updateUserSchema = z
   });
 
 const tripQuerySchema = paginationSchema.extend({
-  userId: z.string().uuid().optional()
+  userId: idSchema.optional()
 });
 
 module.exports = {

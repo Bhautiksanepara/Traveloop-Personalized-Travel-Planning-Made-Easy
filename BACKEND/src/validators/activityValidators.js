@@ -1,7 +1,7 @@
-const { z, paginationSchema } = require("./commonValidators");
+const { z, paginationSchema, idSchema } = require("./commonValidators");
 
 const activityQuerySchema = paginationSchema.extend({
-  cityId: z.string().uuid().optional(),
+  cityId: idSchema.optional(),
   category: z.string().optional(),
   maxCost: z.coerce.number().min(0).optional()
 });

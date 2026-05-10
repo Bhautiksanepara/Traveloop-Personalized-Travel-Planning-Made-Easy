@@ -1,223 +1,289 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Search, 
-  Filter, 
-  ArrowUpDown, 
+import {
+  Search,
   LayoutGrid,
-  MoreHorizontal,
-  User,
-  MapPin,
+  Compass,
   Heart,
-  MessageSquare,
-  Share2
+  Share2,
+  Copy,
+  Eye,
+  CalendarDays,
+  MapPin
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { toast } from 'sonner';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedButton } from '../../components/ui/AnimatedButton';
-import { cn } from '../../lib/utils';
+import { publicApi, getApiBaseUrl } from '../../lib/api';
+import { formatDateRange } from '../../lib/formatters';
 
-const COMMUNITY_POSTS = [
-  {
-    id: 1,
-    username: "HARI PRASATH",
-    handle: "Fabulous Echidna",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Hari",
-    content: "Just finished exploring the hidden alleys of Rome. The architecture here is simply breathtaking! 🏛️",
-    image: "https://images.unsplash.com/photo-1552832230-c0197dd311b5?auto=format&fit=crop&q=80",
-    likes: 245,
-    comments: 42,
-    tags: ["Solo Travel", "Rome", "History"]
-  },
-  {
-    id: 2,
-    username: "VISHESH",
-    handle: "Super Dinosaur",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Vishesh",
-    content: "Backpacking through Southeast Asia. Current stop: Bali. The energy here is unreal. 🌴✨",
-    image: "https://images.unsplash.com/photo-1537996194471-e657df975ab4?auto=format&fit=crop&q=80",
-    likes: 189,
-    comments: 23,
-    tags: ["Backpacking", "Bali", "Adventure"]
-  },
-  {
-    id: 3,
-    username: "ANANYA",
-    handle: "Blissful Ant",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Ananya",
-    content: "Waking up to the Swiss Alps is a dream come true. Highly recommend visiting Lauterbrunnen! 🏔️❄️",
-    image: "https://images.unsplash.com/photo-1531310197839-ccf54634509e?auto=format&fit=crop&q=80",
-    likes: 532,
-    comments: 89,
-    tags: ["Mountains", "Switzerland", "Peace"]
-  },
-  {
-    id: 4,
-    username: "RAHUL",
-    handle: "Cheerful Kangaroo",
-    avatar: "https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul",
-    content: "Found the best sushi spot in Tokyo! It's a tiny 8-seater place near Tsukiji. 🍣🍱",
-    image: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&q=80",
-    likes: 312,
-    comments: 56,
-    tags: ["Foodie", "Tokyo", "HiddenGem"]
-  }
-];
+const FALLBACK_COVER =
+  'https://images.unsplash.com/photo-1515238152791-8216bfdf89a7?auto=format&fit=crop&q=80';
 
 export default function CommunityPage() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchQuery, setSearchQuery] = useState('');
+  const [sharedTrips, setSharedTrips] = useState([]);
+  const [meta, setMeta] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+
+    const timer = window.setTimeout(async () => {
+      try {
+        setLoading(true);
+        setError('');
+        const response = await publicApi.listTrips(
+          searchQuery.trim() ? { search: searchQuery.trim(), limit: 12 } : { limit: 12 }
+        );
+
+        if (!ignore) {
+          setSharedTrips(response.data || []);
+          setMeta(response.meta || null);
+        }
+      } catch (requestError) {
+        if (!ignore) {
+          setError(requestError.message || 'Failed to load shared trips.');
+          setSharedTrips([]);
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    }, 250);
+
+    return () => {
+      ignore = true;
+      window.clearTimeout(timer);
+    };
+  }, [searchQuery]);
+
+  const communityStats = useMemo(() => {
+    const totalViews = sharedTrips.reduce((sum, item) => sum + Number(item.viewCount || 0), 0);
+    const totalTrips = meta?.total || sharedTrips.length;
+    const totalCities = new Set(sharedTrips.flatMap((item) => item.trip.cities || [])).size;
+
+    return {
+      totalViews,
+      totalTrips,
+      totalCities
+    };
+  }, [meta, sharedTrips]);
+
+  const copyLink = async (token) => {
+    const baseUrl = window.location.origin;
+    const shareUrl = `${baseUrl}/shared/${token}`;
+
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      toast.success('Share link copied.');
+    } catch {
+      toast.error('Could not copy the share link.');
+    }
+  };
+
+  const openApiAsset = (path) => `${getApiBaseUrl().replace(/\/api\/v1$/, '')}${path}`;
 
   return (
-    <div className="max-w-4xl mx-auto space-y-10 pb-24 px-4">
-      {/* Header Section */}
+    <div className="max-w-6xl mx-auto space-y-10 pb-24 px-4">
       <div className="flex flex-col gap-8">
-        <div className="flex items-end justify-between">
-          <div className="space-y-1">
+        <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-6">
+          <div className="space-y-2">
             <h1 className="text-5xl font-black text-brand-navy tracking-tighter uppercase leading-none">
-              Community <span className="text-brand-indigo">Tab</span>
+              Shared <span className="text-brand-indigo">Journeys</span>
             </h1>
             <p className="text-brand-slate font-bold uppercase tracking-[0.2em] text-xs pl-1">
-              Connect with fellow travelers
+              Browse live public itineraries from the Traveloop community
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-2">
-            <div className="flex -space-x-3">
-              {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="w-10 h-10 rounded-full border-2 border-white overflow-hidden shadow-sm">
-                  <img src={`https://api.dicebear.com/7.x/avataaars/svg?seed=user${i}`} alt="User" />
-                </div>
-              ))}
-            </div>
-            <span className="text-xs font-black text-brand-navy uppercase tracking-widest ml-4">+1.2k Active</span>
+
+          <div className="grid grid-cols-3 gap-3 w-full md:w-auto">
+            <GlassCard className="px-4 py-4 text-center" hover={false}>
+              <p className="text-2xl font-black text-brand-navy">{communityStats.totalTrips}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-slate">Public Trips</p>
+            </GlassCard>
+            <GlassCard className="px-4 py-4 text-center" hover={false}>
+              <p className="text-2xl font-black text-brand-navy">{communityStats.totalCities}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-slate">Cities</p>
+            </GlassCard>
+            <GlassCard className="px-4 py-4 text-center" hover={false}>
+              <p className="text-2xl font-black text-brand-navy">{communityStats.totalViews}</p>
+              <p className="text-[10px] font-black uppercase tracking-widest text-brand-slate">Views</p>
+            </GlassCard>
           </div>
         </div>
 
-        {/* Search and Filter Bar */}
         <div className="flex flex-col md:flex-row gap-4 items-center">
           <div className="relative flex-1 group w-full">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-slate group-focus-within:text-brand-indigo transition-colors" size={20} />
-            <input 
-              type="text" 
-              placeholder="Search bar ......"
+            <Search
+              className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-slate group-focus-within:text-brand-indigo transition-colors"
+              size={20}
+            />
+            <input
+              type="text"
+              placeholder="Search by trip, city, or country"
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              onChange={(event) => setSearchQuery(event.target.value)}
               className="w-full bg-white border-2 border-brand-navy/5 rounded-2xl py-4 pl-12 pr-4 text-brand-navy placeholder:text-brand-slate/50 focus:outline-none focus:border-brand-indigo/30 focus:ring-4 focus:ring-brand-indigo/5 transition-all shadow-sm font-medium"
             />
           </div>
-          
-          <div className="flex items-center gap-3 shrink-0">
-            <AnimatedButton variant="secondary" className="whitespace-nowrap flex items-center gap-2 px-6 py-4 rounded-2xl border-2 border-brand-navy/5 bg-white cursor-pointer hover:bg-brand-navy/5">
-              <LayoutGrid size={18} className="text-brand-indigo" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-brand-navy">Group by</span>
-            </AnimatedButton>
-            
-            <AnimatedButton variant="secondary" className="whitespace-nowrap flex items-center gap-2 px-6 py-4 rounded-2xl border-2 border-brand-navy/5 bg-white cursor-pointer hover:bg-brand-navy/5">
-              <Filter size={18} className="text-brand-indigo" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-brand-navy">Filter</span>
-            </AnimatedButton>
-            
-            <AnimatedButton variant="secondary" className="whitespace-nowrap flex items-center gap-2 px-6 py-4 rounded-2xl border-2 border-brand-navy/5 bg-white cursor-pointer hover:bg-brand-navy/5">
-              <ArrowUpDown size={18} className="text-brand-indigo" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-brand-navy">Sort by...</span>
-            </AnimatedButton>
-          </div>
+
+          <AnimatedButton
+            variant="secondary"
+            className="whitespace-nowrap flex items-center gap-2 px-6 py-4 rounded-2xl border-2 border-brand-navy/5 bg-white cursor-default"
+          >
+            <LayoutGrid size={18} className="text-brand-indigo" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-brand-navy">
+              Live Feed
+            </span>
+          </AnimatedButton>
         </div>
       </div>
 
-      {/* Posts Feed */}
-      <div className="grid gap-12">
-        <AnimatePresence mode="popLayout">
-          {COMMUNITY_POSTS.map((post, index) => (
-            <motion.div
-              key={post.id}
-              initial={{ opacity: 0, y: 30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1, duration: 0.5, ease: "easeOut" }}
-              className="relative group"
-            >
-              <div className="flex gap-4">
-                {/* Avatar Column */}
-                <div className="flex-shrink-0 pt-2">
-                  <motion.div 
-                    whileHover={{ scale: 1.1, rotate: 5 }}
-                    className="w-12 h-12 rounded-full border-[3px] border-white shadow-xl overflow-hidden cursor-pointer relative z-10"
-                  >
-                    <img src={post.avatar} alt={post.username} className="w-full h-full object-cover" />
-                  </motion.div>
-                </div>
+      {error ? (
+        <GlassCard className="p-8 border-red-200 bg-red-50/60" hover={false}>
+          <p className="text-sm font-bold uppercase tracking-widest text-red-600">{error}</p>
+        </GlassCard>
+      ) : null}
 
-                {/* Content Column */}
-                <div className="flex-1 space-y-3">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <h4 className="text-lg font-black text-brand-navy tracking-tight uppercase">{post.username}</h4>
-                      <div className="px-3 py-1 bg-brand-sky/10 rounded-full">
-                        <span className="text-[9px] font-black text-brand-sky uppercase tracking-widest">{post.handle}</span>
+      {loading ? (
+        <div className="grid md:grid-cols-2 gap-8">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <GlassCard key={index} className="p-0 overflow-hidden animate-pulse" hover={false}>
+              <div className="aspect-[16/9] bg-brand-navy/5" />
+              <div className="p-6 space-y-4">
+                <div className="h-6 bg-brand-navy/5 rounded-xl" />
+                <div className="h-4 bg-brand-navy/5 rounded-xl w-3/4" />
+                <div className="h-4 bg-brand-navy/5 rounded-xl w-1/2" />
+              </div>
+            </GlassCard>
+          ))}
+        </div>
+      ) : null}
+
+      {!loading && !sharedTrips.length ? (
+        <GlassCard className="p-12 text-center space-y-4" hover={false}>
+          <Compass size={42} className="mx-auto text-brand-indigo" />
+          <h2 className="text-2xl font-black text-brand-navy uppercase tracking-tight">No public trips found</h2>
+          <p className="text-brand-slate font-medium">
+            Try a different search term or enable trip sharing from your own itinerary.
+          </p>
+        </GlassCard>
+      ) : null}
+
+      <AnimatePresence mode="popLayout">
+        <div className="grid md:grid-cols-2 gap-8">
+          {sharedTrips.map((item, index) => {
+            const trip = item.trip;
+            const coverImage = trip.coverPhotoUrl?.startsWith('http')
+              ? trip.coverPhotoUrl
+              : trip.coverPhotoUrl
+                ? openApiAsset(trip.coverPhotoUrl)
+                : FALLBACK_COVER;
+
+            return (
+              <motion.div
+                key={item.id}
+                initial={{ opacity: 0, y: 24 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 24 }}
+                transition={{ delay: index * 0.04, duration: 0.35 }}
+              >
+                <GlassCard className="p-0 overflow-hidden border-2 border-brand-navy/5 h-full" hover>
+                  <div className="relative aspect-[16/9] overflow-hidden">
+                    <img
+                      src={coverImage}
+                      alt={trip.name}
+                      className="w-full h-full object-cover transition-transform duration-700 hover:scale-105"
+                    />
+                    <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/70 via-brand-navy/10 to-transparent" />
+                    <div className="absolute top-4 left-4 flex items-center gap-2">
+                      <div className="px-3 py-1 rounded-full bg-white/90 text-[10px] font-black uppercase tracking-widest text-brand-navy">
+                        {trip.user?.name || 'Traveler'}
+                      </div>
+                      <div className="px-3 py-1 rounded-full bg-brand-indigo/90 text-[10px] font-black uppercase tracking-widest text-white">
+                        {trip.stopsCount} stops
                       </div>
                     </div>
-                    <button className="p-2 text-brand-slate hover:text-brand-navy hover:bg-white rounded-xl transition-all cursor-pointer">
-                      <MoreHorizontal size={20} />
-                    </button>
                   </div>
 
-                  <GlassCard className="p-0 overflow-hidden border-2 border-brand-navy/5 hover:border-brand-indigo/20 transition-all duration-500 group-hover:shadow-2xl group-hover:shadow-brand-indigo/5">
-                    <div className="p-4 space-y-4">
-                      <p className="text-brand-slate leading-relaxed font-medium">
-                        {post.content}
+                  <div className="p-6 space-y-5">
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-black text-brand-navy tracking-tight">{trip.name}</h2>
+                      <p className="text-brand-slate font-medium line-clamp-3">
+                        {trip.description || 'A shared Traveloop itinerary ready for inspiration and copy.'}
                       </p>
-                      
-                      <div className="relative aspect-[21/7] max-h-[200px] rounded-2xl overflow-hidden bg-brand-navy/5">
-                        <img 
-                          src={post.image} 
-                          alt="Post content" 
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"
-                        />
-                        <div className="absolute inset-0 bg-gradient-to-t from-brand-navy/40 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="rounded-2xl bg-brand-navy/[0.03] px-4 py-3">
+                        <div className="flex items-center gap-2 text-brand-indigo mb-1">
+                          <CalendarDays size={16} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Dates</span>
+                        </div>
+                        <p className="text-sm font-bold text-brand-navy">
+                          {formatDateRange(trip.startDate, trip.endDate)}
+                        </p>
                       </div>
-
-                      <div className="flex items-center justify-between pt-2">
-                        <div className="flex items-center gap-6">
-                          <button className="flex items-center gap-2 group/btn cursor-pointer">
-                            <div className="w-9 h-9 rounded-full bg-red-50 flex items-center justify-center group-hover/btn:bg-red-100 transition-colors">
-                              <Heart size={18} className="text-brand-slate group-hover/btn:text-red-500 transition-colors" />
-                            </div>
-                            <span className="text-xs font-black text-brand-navy uppercase tracking-widest">{post.likes}</span>
-                          </button>
-                          
-                          <button className="flex items-center gap-2 group/btn cursor-pointer">
-                            <div className="w-9 h-9 rounded-full bg-brand-indigo/5 flex items-center justify-center group-hover/btn:bg-brand-indigo/10 transition-colors">
-                              <MessageSquare size={18} className="text-brand-slate group-hover/btn:text-brand-indigo transition-colors" />
-                            </div>
-                            <span className="text-xs font-black text-brand-navy uppercase tracking-widest">{post.comments}</span>
-                          </button>
+                      <div className="rounded-2xl bg-brand-navy/[0.03] px-4 py-3">
+                        <div className="flex items-center gap-2 text-brand-indigo mb-1">
+                          <Eye size={16} />
+                          <span className="text-[10px] font-black uppercase tracking-widest">Views</span>
                         </div>
-
-                        <div className="flex gap-2">
-                          {post.tags.map(tag => (
-                            <span key={tag} className="text-[9px] font-bold text-brand-slate uppercase tracking-widest border border-brand-navy/5 px-2 py-1 rounded-md">
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
+                        <p className="text-sm font-bold text-brand-navy">{item.viewCount || 0}</p>
                       </div>
                     </div>
-                  </GlassCard>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
 
-      {/* Floating Action Button */}
-      <motion.button
-        initial={{ scale: 0 }}
-        animate={{ scale: 1 }}
-        whileHover={{ scale: 1.1, rotate: 90 }}
-        whileTap={{ scale: 0.9 }}
-        className="fixed bottom-10 right-10 w-16 h-16 rounded-full bg-brand-navy text-white shadow-2xl flex items-center justify-center z-50 group cursor-pointer"
-      >
-        <Share2 size={24} className="group-hover:scale-110 transition-transform" />
-      </motion.button>
+                    <div className="flex flex-wrap gap-2">
+                      {(trip.cities || []).map((city) => (
+                        <span
+                          key={city}
+                          className="inline-flex items-center gap-1 text-[10px] font-black uppercase tracking-widest border border-brand-navy/10 px-3 py-2 rounded-full text-brand-slate"
+                        >
+                          <MapPin size={12} />
+                          {city}
+                        </span>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3 pt-2">
+                      <div className="flex items-center gap-4 text-brand-slate">
+                        <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+                          <Heart size={15} className="text-brand-rose" />
+                          {trip.activitiesCount} activities
+                        </span>
+                        <span className="inline-flex items-center gap-2 text-xs font-black uppercase tracking-widest">
+                          <Share2 size={15} className="text-brand-indigo" />
+                          Public
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => copyLink(item.publicToken)}
+                          className="w-11 h-11 rounded-2xl border border-brand-navy/10 bg-white text-brand-navy hover:bg-brand-navy hover:text-white transition-colors flex items-center justify-center"
+                          aria-label="Copy shared trip link"
+                        >
+                          <Copy size={18} />
+                        </button>
+                        <Link to={`/shared/${item.publicToken}`}>
+                          <AnimatedButton className="px-5 py-3 rounded-2xl">
+                            View Trip
+                          </AnimatedButton>
+                        </Link>
+                      </div>
+                    </div>
+                  </div>
+                </GlassCard>
+              </motion.div>
+            );
+          })}
+        </div>
+      </AnimatePresence>
     </div>
   );
 }

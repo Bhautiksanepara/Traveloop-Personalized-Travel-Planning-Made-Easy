@@ -1,4 +1,4 @@
-const { z, paginationSchema } = require("./commonValidators");
+const { z, paginationSchema, idSchema } = require("./commonValidators");
 
 const tripSchema = z.object({
   name: z.string().min(2).max(200),
@@ -13,11 +13,24 @@ const tripSchema = z.object({
 const tripUpdateSchema = tripSchema.partial();
 
 const tripQuerySchema = paginationSchema.extend({
-  search: z.string().optional()
+  search: z.string().optional(),
+  status: z.enum(["all", "upcoming", "ongoing", "completed"]).optional(),
+  sortBy: z.enum(["startDate", "endDate", "name", "budgetLimit", "createdAt"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional()
+});
+
+const itineraryQuerySchema = z.object({
+  search: z.string().trim().optional(),
+  cityId: idSchema.optional(),
+  stopId: idSchema.optional(),
+  hasActivities: z.coerce.boolean().optional(),
+  dayType: z.enum(["arrival", "departure", "full"]).optional(),
+  groupBy: z.enum(["day", "city", "stop"]).optional(),
+  sortOrder: z.enum(["asc", "desc"]).optional()
 });
 
 const stopSchema = z.object({
-  cityId: z.string().uuid(),
+  cityId: idSchema,
   arriveDate: z.string().date(),
   departDate: z.string().date(),
   orderIndex: z.number().int().min(0),
@@ -29,20 +42,22 @@ const stopUpdateSchema = stopSchema.partial();
 const reorderStopsSchema = z.object({
   items: z.array(
     z.object({
-      stopId: z.string().uuid(),
+      stopId: idSchema,
       orderIndex: z.number().int().min(0)
     })
   ).min(1)
 });
 
 const stopActivitySchema = z.object({
-  activityId: z.string().uuid(),
+  activityId: idSchema,
+  scheduledDate: z.string().date().optional().nullable(),
   scheduledTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
   actualCost: z.coerce.number().min(0).optional().nullable(),
   orderIndex: z.number().int().min(0)
 });
 
 const stopActivityUpdateSchema = z.object({
+  scheduledDate: z.string().date().optional().nullable(),
   scheduledTime: z.string().regex(/^\d{2}:\d{2}(:\d{2})?$/).optional().nullable(),
   actualCost: z.coerce.number().min(0).optional().nullable(),
   orderIndex: z.number().int().min(0).optional()
@@ -51,14 +66,14 @@ const stopActivityUpdateSchema = z.object({
 const reorderStopActivitiesSchema = z.object({
   items: z.array(
     z.object({
-      stopActivityId: z.string().uuid(),
+      stopActivityId: idSchema,
       orderIndex: z.number().int().min(0)
     })
   ).min(1)
 });
 
 const expenseSchema = z.object({
-  stopId: z.string().uuid().optional().nullable(),
+  stopId: idSchema.optional().nullable(),
   category: z.enum(["transport", "accommodation", "activities", "meals", "other"]),
   label: z.string().max(200).optional().nullable(),
   amount: z.coerce.number().min(0),
@@ -78,7 +93,7 @@ const packingItemSchema = z.object({
 const packingItemUpdateSchema = packingItemSchema.partial();
 
 const noteSchema = z.object({
-  stopId: z.string().uuid().optional().nullable(),
+  stopId: idSchema.optional().nullable(),
   content: z.string().min(1).max(5000),
   noteDate: z.string().date().optional()
 });
@@ -86,7 +101,7 @@ const noteSchema = z.object({
 const noteUpdateSchema = noteSchema.partial();
 
 const noteQuerySchema = paginationSchema.extend({
-  stopId: z.string().uuid().optional()
+  stopId: idSchema.optional()
 });
 
 const shareUpdateSchema = z.object({
@@ -97,6 +112,7 @@ module.exports = {
   tripSchema,
   tripUpdateSchema,
   tripQuerySchema,
+  itineraryQuerySchema,
   stopSchema,
   stopUpdateSchema,
   reorderStopsSchema,

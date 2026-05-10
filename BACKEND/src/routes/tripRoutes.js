@@ -2,11 +2,12 @@ const express = require("express");
 const tripController = require("../controllers/tripController");
 const validate = require("../middlewares/validate");
 const { requireAuth } = require("../middlewares/auth");
-const { z } = require("../validators/commonValidators");
+const { z, idSchema } = require("../validators/commonValidators");
 const {
   tripSchema,
   tripUpdateSchema,
   tripQuerySchema,
+  itineraryQuerySchema,
   stopSchema,
   stopUpdateSchema,
   reorderStopsSchema,
@@ -24,16 +25,16 @@ const {
 } = require("../validators/tripValidators");
 
 const router = express.Router();
-const tripIdSchema = z.object({ id: z.string().uuid() });
-const stopIdSchema = z.object({ id: z.string().uuid(), stopId: z.string().uuid() });
+const tripIdSchema = z.object({ id: idSchema });
+const stopIdSchema = z.object({ id: idSchema, stopId: idSchema });
 const stopActivityIdSchema = z.object({
-  id: z.string().uuid(),
-  stopId: z.string().uuid(),
-  stopActivityId: z.string().uuid()
+  id: idSchema,
+  stopId: idSchema,
+  stopActivityId: idSchema
 });
-const expenseIdSchema = z.object({ id: z.string().uuid(), expenseId: z.string().uuid() });
-const itemIdSchema = z.object({ id: z.string().uuid(), itemId: z.string().uuid() });
-const noteIdSchema = z.object({ id: z.string().uuid(), noteId: z.string().uuid() });
+const expenseIdSchema = z.object({ id: idSchema, expenseId: idSchema });
+const itemIdSchema = z.object({ id: idSchema, itemId: idSchema });
+const noteIdSchema = z.object({ id: idSchema, noteId: idSchema });
 
 router.use(requireAuth);
 
@@ -72,7 +73,7 @@ router.patch(
   tripController.reorderStopActivities
 );
 
-router.get("/:id/itinerary", validate(tripIdSchema, "params"), tripController.getItinerary);
+router.get("/:id/itinerary", validate(tripIdSchema, "params"), validate(itineraryQuerySchema, "query"), tripController.getItinerary);
 router.get("/:id/budget-summary", validate(tripIdSchema, "params"), tripController.getBudgetSummary);
 router.get("/:id/expenses", validate(tripIdSchema, "params"), tripController.listExpenses);
 router.post("/:id/expenses", validate(tripIdSchema, "params"), validate(expenseSchema), tripController.createExpense);

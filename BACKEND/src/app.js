@@ -10,9 +10,17 @@ const errorHandler = require("./middlewares/errorHandler");
 const app = express();
 
 app.use(helmet());
+const allowedOrigins = env.corsOrigin.split(",").map((value) => value.trim()).filter(Boolean);
+
 app.use(
   cors({
-    origin: env.corsOrigin.split(",").map((value) => value.trim()),
+    origin(origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        return callback(null, true);
+      }
+
+      return callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
     credentials: true
   })
 );

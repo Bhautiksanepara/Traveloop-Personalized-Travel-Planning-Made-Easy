@@ -12,6 +12,11 @@ const createTrip = catchAsync(async (req, res) => {
   return sendSuccess(res, 201, "Trip created successfully.", trip);
 });
 
+const listPublicTrips = catchAsync(async (req, res) => {
+  const result = await tripService.listPublicTrips(req.query);
+  return sendSuccess(res, 200, "Shared trips fetched successfully.", result.items, result.meta);
+});
+
 const getTrip = catchAsync(async (req, res) => {
   const trip = await tripService.getTripById(req.params.id, req.user.id);
   return sendSuccess(res, 200, "Trip fetched successfully.", trip);
@@ -74,7 +79,7 @@ const reorderStopActivities = catchAsync(async (req, res) => {
 });
 
 const getItinerary = catchAsync(async (req, res) => {
-  const itinerary = await tripService.getItinerary(req.params.id, req.user.id);
+  const itinerary = await tripService.getItinerary(req.params.id, req.user.id, req.query);
   return sendSuccess(res, 200, "Itinerary fetched successfully.", itinerary);
 });
 
@@ -176,6 +181,7 @@ const copyPublicTrip = catchAsync(async (req, res) => {
 module.exports = {
   listTrips,
   createTrip,
+  listPublicTrips,
   getTrip,
   updateTrip,
   deleteTrip,

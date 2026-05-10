@@ -47,16 +47,191 @@ const assertStopWithinTripDates = (trip, arriveDate, departDate) => {
   }
 };
 
+const assertDateWithinStopRange = (stop, scheduledDate) => {
+  if (!scheduledDate) {
+    return;
+  }
+
+  const stopStart = new Date(stop.arriveDate);
+  const stopEnd = new Date(stop.departDate);
+
+  if (scheduledDate < stopStart || scheduledDate > stopEnd) {
+    throw new AppError(400, "Scheduled activity date must fall within the selected stop date range.");
+  }
+};
+
 const formatTrip = (trip) => ({
   ...trip,
   budgetLimit: toNumber(trip.budgetLimit)
 });
+
+const getInclusiveDates = (startDateValue, endDateValue) => {
+  const dates = [];
+  const current = new Date(startDateValue);
+  const end = new Date(endDateValue);
+
+  while (current <= end) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setUTCDate(current.getUTCDate() + 1);
+  }
+
+  return dates;
+};
+
+const distributeActivitiesAcrossDays = (activities, dayCount) => {
+  if (!dayCount) {
+    return [];
+  }
+
+  const buckets = Array.from({ length: dayCount }, () => []);
+
+  if (!activities.length) {
+    return buckets;
+  }
+
+  const targetPerDay = Math.max(Math.ceil(activities.length / dayCount), 1);
+
+  activities.forEach((activity, index) => {
+    const dayIndex = Math.min(Math.floor(index / targetPerDay), dayCount - 1);
+    buckets[dayIndex].push(activity);
+  });
+
+  return buckets;
+};
+
+const sortDays = (days, sortOrder = "asc") => {
+  const direction = sortOrder === "desc" ? -1 : 1;
+
+  return [...days].sort((left, right) => {
+    const leftTime = new Date(left.date).getTime();
+    const rightTime = new Date(right.date).getTime();
+
+    if (leftTime !== rightTime) {
+      return (leftTime - rightTime) * direction;
+    }
+
+    return (left.dayNumber - right.dayNumber) * direction;
+  });
+};
+
+const buildItineraryGroups = (days, groupBy) => {
+  if (groupBy === "day") {
+    return days.map((day) => ({
+      key: `${day.stopId}-${day.date}`,
+      label: `Day ${day.dayNumber}`,
+      secondaryLabel: `${day.city?.name || "City"} • ${day.date}`,
+      type: "day",
+      items: [day]
+    }));
+  }
+
+  const buckets = new Map();
+
+  days.forEach((day) => {
+    const key = groupBy === "city" ? day.city?.id || day.city?.name || day.stopId : day.stopId;
+    const existing = buckets.get(key);
+
+    if (existing) {
+      existing.items.push(day);
+      return;
+    }
+
+    buckets.set(key, {
+      key,
+      label: groupBy === "city" ? day.city?.name || "Unknown City" : `${day.city?.name || "Stop"} stop`,
+      secondaryLabel:
+        groupBy === "city"
+          ? `${day.city?.country || ""}`.trim()
+          : `${day.stopDateRange?.arriveDate || ""} - ${day.stopDateRange?.departDate || ""}`.trim(),
+      type: groupBy,
+      items: [day]
+    });
+  });
+
+  return [...buckets.values()];
+};
+
+const formatPublicTripCard = (sharedTrip) => {
+  const stops = sharedTrip.trip?.stops || [];
+  const uniqueCities = [...new Set(stops.map((stop) => stop.city?.name).filter(Boolean))];
+
+  return {
+    id: sharedTrip.id,
+    publicToken: sharedTrip.publicToken,
+    viewCount: sharedTrip.viewCount,
+    createdAt: sharedTrip.createdAt,
+    updatedAt: sharedTrip.updatedAt,
+    trip: {
+      id: sharedTrip.trip.id,
+      name: sharedTrip.trip.name,
+      description: sharedTrip.trip.description,
+      startDate: sharedTrip.trip.startDate,
+      endDate: sharedTrip.trip.endDate,
+      coverPhotoUrl: sharedTrip.trip.coverPhotoUrl,
+      budgetLimit: toNumber(sharedTrip.trip.budgetLimit),
+      slug: sharedTrip.trip.slug,
+      user: serializeUser(sharedTrip.trip.user),
+      stopsCount: stops.length,
+      activitiesCount: stops.reduce((sum, stop) => sum + stop.activities.length, 0),
+      cities: uniqueCities.slice(0, 4)
+    }
+  };
+};
+
+const findSharedTripByToken = async (token) => {
+  const shared = await prisma.sharedTrip.findFirst({
+    where: {
+      publicToken: token,
+      isActive: true
+    },
+    include: {
+      trip: {
+        include: {
+          user: true,
+          stops: {
+            include: {
+              city: true,
+              activities: {
+                include: {
+                  activity: true
+                },
+                orderBy: {
+                  orderIndex: "asc"
+                }
+              }
+            },
+            orderBy: {
+              orderIndex: "asc"
+            }
+          },
+          packingItems: {
+            orderBy: {
+              orderIndex: "asc"
+            }
+          },
+          notes: {
+            orderBy: {
+              noteDate: "desc"
+            }
+          }
+        }
+      }
+    }
+  });
+
+  if (!shared) {
+    throw new AppError(404, "Shared trip not found or inactive.");
+  }
+
+  return shared;
+};
 
 const listTrips = async (userId, query) => {
   const { page, limit, skip } = getPagination(query);
   const where = {
     userId
   };
+  const now = new Date();
 
   if (query.search) {
     where.OR = [
@@ -65,15 +240,37 @@ const listTrips = async (userId, query) => {
     ];
   }
 
+  if (query.status === "upcoming") {
+    where.startDate = { gt: now };
+  }
+
+  if (query.status === "ongoing") {
+    where.startDate = { lte: now };
+    where.endDate = { gte: now };
+  }
+
+  if (query.status === "completed") {
+    where.endDate = { lt: now };
+  }
+
+  const sortFieldMap = {
+    startDate: "startDate",
+    endDate: "endDate",
+    name: "name",
+    budgetLimit: "budgetLimit",
+    createdAt: "createdAt"
+  };
+  const orderBy = {
+    [sortFieldMap[query.sortBy] || "startDate"]: query.sortOrder || "desc"
+  };
+
   const [total, items] = await Promise.all([
     prisma.trip.count({ where }),
     prisma.trip.findMany({
       where,
       skip,
       take: limit,
-      orderBy: {
-        startDate: "desc"
-      },
+      orderBy,
       include: {
         stops: true
       }
@@ -104,6 +301,61 @@ const createTrip = async (userId, payload) => {
   });
 
   return formatTrip(trip);
+};
+
+const listPublicTrips = async (query = {}) => {
+  const { page, limit, skip } = getPagination(query);
+  const where = {
+    isActive: true,
+    trip: query.search
+      ? {
+          OR: [
+            { name: { contains: query.search } },
+            { description: { contains: query.search } },
+            {
+              stops: {
+                some: {
+                  city: {
+                    OR: [{ name: { contains: query.search } }, { country: { contains: query.search } }]
+                  }
+                }
+              }
+            }
+          ]
+        }
+      : undefined
+  };
+
+  const [total, items] = await Promise.all([
+    prisma.sharedTrip.count({ where }),
+    prisma.sharedTrip.findMany({
+      where,
+      skip,
+      take: limit,
+      orderBy: [{ viewCount: "desc" }, { createdAt: "desc" }],
+      include: {
+        trip: {
+          include: {
+            user: true,
+            stops: {
+              include: {
+                city: true,
+                activities: true
+              },
+              orderBy: {
+                orderIndex: "asc"
+              }
+            }
+          }
+        }
+      }
+    })
+  ]);
+
+  return {
+    items: items.map(formatPublicTripCard),
+    meta: buildMeta(page, limit, total)
+  };
 };
 
 const getTripById = async (tripId, userId) => {
@@ -250,10 +502,14 @@ const addStopActivity = async (tripId, stopId, userId, payload) => {
     throw new AppError(400, "Activity must belong to the same city as the selected stop.");
   }
 
+  const scheduledDate = payload.scheduledDate ? toDateOnly(payload.scheduledDate) : null;
+  assertDateWithinStopRange(stop, scheduledDate);
+
   return prisma.stopActivity.create({
     data: {
       stopId,
       activityId: payload.activityId,
+      scheduledDate,
       scheduledTime: payload.scheduledTime ? toSqlTimeDate(payload.scheduledTime) : null,
       actualCost: payload.actualCost,
       orderIndex: payload.orderIndex
@@ -266,7 +522,7 @@ const addStopActivity = async (tripId, stopId, userId, payload) => {
 
 const updateStopActivity = async (tripId, stopId, stopActivityId, userId, payload) => {
   await ensureTripOwner(tripId, userId);
-  await ensureStopBelongsToTrip(tripId, stopId);
+  const stop = await ensureStopBelongsToTrip(tripId, stopId);
 
   const stopActivity = await prisma.stopActivity.findFirst({
     where: {
@@ -279,9 +535,21 @@ const updateStopActivity = async (tripId, stopId, stopActivityId, userId, payloa
     throw new AppError(404, "Stop activity not found.");
   }
 
+  const scheduledDate =
+    payload.scheduledDate === null
+      ? null
+      : payload.scheduledDate
+        ? toDateOnly(payload.scheduledDate)
+        : undefined;
+
+  if (scheduledDate !== undefined) {
+    assertDateWithinStopRange(stop, scheduledDate);
+  }
+
   return prisma.stopActivity.update({
     where: { id: stopActivityId },
     data: {
+      scheduledDate,
       scheduledTime: payload.scheduledTime ? toSqlTimeDate(payload.scheduledTime) : undefined,
       actualCost: payload.actualCost,
       orderIndex: payload.orderIndex
@@ -318,7 +586,7 @@ const reorderStopActivities = async (tripId, stopId, userId, items) => {
   );
 };
 
-const getItinerary = async (tripId, userId) => {
+const getItinerary = async (tripId, userId, query = {}) => {
   await ensureTripOwner(tripId, userId);
 
   const trip = await prisma.trip.findUnique({
@@ -344,34 +612,142 @@ const getItinerary = async (tripId, userId) => {
   });
 
   const days = [];
-  trip.stops.forEach((stop) => {
-    const current = new Date(stop.arriveDate);
-    const end = new Date(stop.departDate);
+  let dayNumber = 1;
 
-    while (current <= end) {
+  trip.stops.forEach((stop, stopIndex) => {
+    const stopDates = getInclusiveDates(stop.arriveDate, stop.departDate);
+    const normalizedActivities = stop.activities.map((item) => ({
+      id: item.id,
+      orderIndex: item.orderIndex,
+      scheduledDate: item.scheduledDate ? item.scheduledDate.toISOString().slice(0, 10) : null,
+      scheduledTime: formatTime(item.scheduledTime),
+      actualCost: toNumber(item.actualCost),
+      activity: {
+        ...item.activity,
+        estimatedCost: toNumber(item.activity.estimatedCost)
+      }
+    }));
+    const datedBuckets = Array.from({ length: stopDates.length }, () => []);
+    const flexibleActivities = [];
+
+    normalizedActivities.forEach((activity) => {
+      if (activity.scheduledDate) {
+        const dayIndex = stopDates.findIndex((date) => date === activity.scheduledDate);
+
+        if (dayIndex >= 0) {
+          datedBuckets[dayIndex].push(activity);
+          return;
+        }
+      }
+
+      flexibleActivities.push(activity);
+    });
+
+    const flexibleBuckets = distributeActivitiesAcrossDays(flexibleActivities, stopDates.length);
+
+    stopDates.forEach((date, dateIndex) => {
+      const dayActivities = [...datedBuckets[dateIndex], ...flexibleBuckets[dateIndex]].sort(
+        (left, right) => left.orderIndex - right.orderIndex
+      );
+
       days.push({
-        date: current.toISOString().slice(0, 10),
+        date,
+        dayNumber,
         city: stop.city,
         stopId: stop.id,
-        activities: stop.activities.map((item) => ({
-          id: item.id,
-          orderIndex: item.orderIndex,
-          scheduledTime: formatTime(item.scheduledTime),
-          actualCost: toNumber(item.actualCost),
-          activity: {
-            ...item.activity,
-            estimatedCost: toNumber(item.activity.estimatedCost)
-          }
-        }))
+        stopOrder: stopIndex + 1,
+        stopDateRange: {
+          arriveDate: stop.arriveDate,
+          departDate: stop.departDate
+        },
+        isArrivalDay: dateIndex === 0,
+        isDepartureDay: dateIndex === stopDates.length - 1,
+        activities: dayActivities
       });
 
-      current.setUTCDate(current.getUTCDate() + 1);
-    }
+      dayNumber += 1;
+    });
   });
+
+  const normalizedSearch = query.search?.trim().toLowerCase();
+  let filteredDays = days.filter((day) => {
+    if (query.cityId && day.city?.id !== query.cityId) {
+      return false;
+    }
+
+    if (query.stopId && day.stopId !== query.stopId) {
+      return false;
+    }
+
+    if (query.hasActivities !== undefined) {
+      const hasActivities = day.activities.length > 0;
+      if (hasActivities !== query.hasActivities) {
+        return false;
+      }
+    }
+
+    if (query.dayType === "arrival" && !day.isArrivalDay) {
+      return false;
+    }
+
+    if (query.dayType === "departure" && !day.isDepartureDay) {
+      return false;
+    }
+
+    if (query.dayType === "full" && (day.isArrivalDay || day.isDepartureDay)) {
+      return false;
+    }
+
+    if (!normalizedSearch) {
+      return true;
+    }
+
+    return (
+      day.city?.name?.toLowerCase().includes(normalizedSearch) ||
+      day.city?.country?.toLowerCase().includes(normalizedSearch) ||
+      day.activities.some(
+        (item) =>
+          item.activity.name.toLowerCase().includes(normalizedSearch) ||
+          item.activity.category.toLowerCase().includes(normalizedSearch)
+      )
+    );
+  });
+
+  filteredDays = sortDays(filteredDays, query.sortOrder || "asc");
+  const groupBy = query.groupBy || "day";
 
   return {
     trip: formatTrip(trip),
-    days
+    query: {
+      search: query.search || "",
+      cityId: query.cityId || "",
+      stopId: query.stopId || "",
+      hasActivities: query.hasActivities,
+      dayType: query.dayType || "",
+      groupBy,
+      sortOrder: query.sortOrder || "asc"
+    },
+    summary: {
+      totalDays: filteredDays.length,
+      totalStops: new Set(filteredDays.map((day) => day.stopId)).size,
+      totalActivities: filteredDays.reduce((sum, day) => sum + day.activities.length, 0)
+    },
+    filters: {
+      cities: trip.stops.map((stop) => ({
+        id: stop.city.id,
+        name: stop.city.name,
+        country: stop.city.country
+      })),
+      stops: trip.stops.map((stop) => ({
+        id: stop.id,
+        cityId: stop.cityId,
+        cityName: stop.city.name,
+        arriveDate: stop.arriveDate,
+        departDate: stop.departDate
+      }))
+    },
+    days: filteredDays,
+    groups: buildItineraryGroups(filteredDays, groupBy)
   };
 };
 
@@ -625,49 +1001,7 @@ const deleteShare = async (tripId, userId) => {
 };
 
 const getPublicTrip = async (token) => {
-  const shared = await prisma.sharedTrip.findFirst({
-    where: {
-      publicToken: token,
-      isActive: true
-    },
-    include: {
-      trip: {
-        include: {
-          user: true,
-          stops: {
-            include: {
-              city: true,
-              activities: {
-                include: {
-                  activity: true
-                },
-                orderBy: {
-                  orderIndex: "asc"
-                }
-              }
-            },
-            orderBy: {
-              orderIndex: "asc"
-            }
-          },
-          packingItems: {
-            orderBy: {
-              orderIndex: "asc"
-            }
-          },
-          notes: {
-            orderBy: {
-              noteDate: "desc"
-            }
-          }
-        }
-      }
-    }
-  });
-
-  if (!shared) {
-    throw new AppError(404, "Shared trip not found or inactive.");
-  }
+  const shared = await findSharedTripByToken(token);
 
   await prisma.sharedTrip.update({
     where: { id: shared.id },
@@ -689,7 +1023,7 @@ const getPublicTrip = async (token) => {
 };
 
 const copyPublicTrip = async (token, userId) => {
-  const shared = await getPublicTrip(token);
+  const shared = await findSharedTripByToken(token);
   const sourceTrip = shared.trip;
 
   return prisma.$transaction(async (tx) => {
@@ -728,6 +1062,7 @@ const copyPublicTrip = async (token, userId) => {
           data: {
             stopId: createdStop.id,
             activityId: stopActivity.activityId,
+            scheduledDate: stopActivity.scheduledDate,
             scheduledTime: stopActivity.scheduledTime,
             actualCost: stopActivity.actualCost,
             orderIndex: stopActivity.orderIndex
@@ -766,6 +1101,7 @@ const copyPublicTrip = async (token, userId) => {
 module.exports = {
   listTrips,
   createTrip,
+  listPublicTrips,
   getTripById,
   updateTrip,
   deleteTrip,

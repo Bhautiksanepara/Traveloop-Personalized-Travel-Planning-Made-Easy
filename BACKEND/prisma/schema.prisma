@@ -116,6 +116,7 @@ model StopActivity {
   id            String    @id @default(dbgenerated("(UUID())")) @db.Char(36)
   stopId        String    @map("stop_id") @db.Char(36)
   activityId    String    @map("activity_id") @db.Char(36)
+  scheduledDate DateTime? @map("scheduled_date") @db.Date
   scheduledTime DateTime? @map("scheduled_time") @db.Time(0)
   actualCost    Decimal?  @map("actual_cost") @db.Decimal(10, 2)
   orderIndex    Int       @default(0) @map("order_index")
@@ -124,6 +125,7 @@ model StopActivity {
   activity      Activity  @relation(fields: [activityId], references: [id], onDelete: Restrict, onUpdate: Cascade)
 
   @@unique([stopId, activityId], map: "uq_stop_activity")
+  @@index([stopId, scheduledDate], map: "idx_stop_act_date")
   @@index([stopId, orderIndex(sort: Asc)], map: "idx_stop_act_stop")
   @@index([activityId], map: "idx_stop_act_activity")
   @@map("stop_activities")

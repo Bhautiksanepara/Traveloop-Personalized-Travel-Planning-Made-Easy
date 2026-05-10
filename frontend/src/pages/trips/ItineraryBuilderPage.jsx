@@ -1,224 +1,431 @@
-import { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  Plus, 
-  Trash2, 
-  Calendar, 
-  DollarSign, 
-  Layout,
-  Info,
-  ChevronRight,
-  PlusCircle,
-  CheckCircle2,
-  Edit3,
-  GripVertical
-} from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { motion } from 'framer-motion';
+import { DndContext, PointerSensor, closestCenter, useSensor, useSensors } from '@dnd-kit/core';
+import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+import { Plus, Trash2, Layout, MapPin, GripVertical, CalendarDays } from 'lucide-react';
 import { GlassCard } from '../../components/ui/GlassCard';
 import { AnimatedButton } from '../../components/ui/AnimatedButton';
+import { activitiesApi, citiesApi, tripsApi } from '../../lib/api';
+import { useResolvedTrip } from '../../hooks/useResolvedTrip';
+import { formatDateRange } from '../../lib/formatters';
+
+function getStopDates(startDate, endDate) {
+  if (!startDate || !endDate) {
+    return [];
+  }
+
+  const dates = [];
+  const current = new Date(`${startDate.slice(0, 10)}T00:00:00`);
+  const end = new Date(`${endDate.slice(0, 10)}T00:00:00`);
+
+  while (current <= end) {
+    dates.push(current.toISOString().slice(0, 10));
+    current.setDate(current.getDate() + 1);
+  }
+
+  return dates;
+}
+
+function formatTripDay(dateValue) {
+  return new Date(`${dateValue}T00:00:00`).toLocaleDateString(undefined, {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric'
+  });
+}
+
+function SortableStopCard({
+  stop,
+  selectedDate,
+  activitySearch,
+  activityResults,
+  onDateChange,
+  onSearchChange,
+  onAddActivity,
+  onDeleteActivity,
+  onDeleteStop
+}) {
+  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: stop.id });
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition
+  };
+  const stopDates = getStopDates(stop.arriveDate, stop.departDate);
+
+  return (
+    <div ref={setNodeRef} style={style}>
+      <GlassCard className="p-8 space-y-6 !rounded-[32px] bg-white border-brand-navy/10" hover={false}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex items-start gap-4">
+            <button
+              type="button"
+              {...attributes}
+              {...listeners}
+              className="rounded-2xl border border-brand-navy/10 bg-brand-navy/[0.02] p-3 text-brand-navy cursor-grab active:cursor-grabbing"
+            >
+              <GripVertical size={18} />
+            </button>
+            <div>
+              <h3 className="text-2xl font-black text-brand-navy">{stop.city?.name}</h3>
+              <p className="text-brand-slate font-medium">{formatDateRange(stop.arriveDate, stop.departDate)}</p>
+              <p className="text-xs font-black uppercase tracking-widest text-brand-sky mt-2">
+                {stop.activities?.length || 0} activities planned
+              </p>
+            </div>
+          </div>
+          <button onClick={() => onDeleteStop(stop.id)} className="p-3 rounded-xl bg-red-50 text-red-500">
+            <Trash2 size={18} />
+          </button>
+        </div>
+
+        <div className="space-y-4 border-t border-brand-navy/5 pt-6">
+          <div className="flex items-center gap-2">
+            <CalendarDays size={16} className="text-brand-indigo" />
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Assign activities to a trip day</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {stopDates.map((date) => (
+              <button
+                key={date}
+                type="button"
+                onClick={() => onDateChange(stop.id, date)}
+                className={`rounded-2xl px-4 py-2.5 border text-xs font-black uppercase tracking-widest transition-all ${
+                  selectedDate === date
+                    ? 'border-brand-navy bg-brand-navy text-white shadow-lg'
+                    : 'border-brand-navy/10 bg-white text-brand-slate hover:border-brand-indigo/20'
+                }`}
+              >
+                {formatTripDay(date)}
+              </button>
+            ))}
+          </div>
+
+          <div className="grid md:grid-cols-[minmax(0,1fr)_auto] gap-3 items-center">
+            <input
+              value={activitySearch}
+              onChange={(event) => onSearchChange(stop, event.target.value)}
+              placeholder={`Search ${stop.city?.name} activities...`}
+              className="w-full bg-white border-2 border-brand-navy/5 rounded-2xl py-4 px-4 text-brand-navy font-bold focus:outline-none focus:border-brand-sky/30 transition-all shadow-sm"
+            />
+            <span className="text-xs font-black uppercase tracking-widest text-brand-sky">
+              {selectedDate ? formatTripDay(selectedDate) : 'Pick a day'}
+            </span>
+          </div>
+
+          <div className="grid gap-3">
+            {activityResults.map((activity) => {
+              const alreadyAdded = stop.activities?.some((item) => item.activityId === activity.id);
+
+              return (
+                <div key={activity.id} className="rounded-2xl border border-brand-navy/10 bg-brand-navy/[0.02] p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{activity.name}</h4>
+                    <p className="text-xs font-bold uppercase tracking-widest text-brand-slate">
+                      {activity.category} • estimated {Number(activity.estimatedCost || 0)}
+                    </p>
+                  </div>
+                  <AnimatedButton
+                    onClick={() => onAddActivity(stop, activity)}
+                    className="px-4 py-3 rounded-2xl"
+                    disabled={alreadyAdded}
+                  >
+                    {alreadyAdded ? 'Added' : 'Add Activity'}
+                  </AnimatedButton>
+                </div>
+              );
+            })}
+            {!activityResults.length ? (
+              <p className="text-sm font-bold text-brand-slate">Search to load activities for this stop.</p>
+            ) : null}
+          </div>
+
+          {stop.activities?.length ? (
+            <div className="space-y-3 border-t border-brand-navy/5 pt-6">
+              <p className="text-[10px] font-black uppercase tracking-[0.2em] text-brand-slate">Planned for this stop</p>
+              {stop.activities.map((item) => (
+                <div key={item.id} className="rounded-2xl border border-brand-navy/10 bg-white p-4 flex items-center justify-between gap-3">
+                  <div>
+                    <h4 className="text-sm font-black uppercase tracking-widest text-brand-navy">{item.activity?.name}</h4>
+                    <p className="text-xs font-bold uppercase tracking-widest text-brand-slate">
+                      {(item.scheduledDate && formatTripDay(item.scheduledDate.slice(0, 10))) || 'Flexible day'} • {item.scheduledTime || 'Flexible time'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => onDeleteActivity(stop.id, item.id)}
+                    className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-black uppercase tracking-widest text-red-600"
+                  >
+                    Remove
+                  </button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </GlassCard>
+    </div>
+  );
+}
 
 export default function ItineraryBuilderPage() {
-  const [sections, setSections] = useState([
-    { id: 1, title: 'Section 1', description: '', dateRange: '', budget: '', isCompleted: false }
-  ]);
+  const { tripId, trip, loading: tripLoading, error: tripError, setTrip } = useResolvedTrip();
+  const [citySearch, setCitySearch] = useState('');
+  const [cityResults, setCityResults] = useState([]);
+  const [formData, setFormData] = useState({
+    cityId: '',
+    arriveDate: '',
+    departDate: ''
+  });
+  const [activitySearchByStop, setActivitySearchByStop] = useState({});
+  const [activityResultsByStop, setActivityResultsByStop] = useState({});
+  const [selectedDateByStop, setSelectedDateByStop] = useState({});
+  const [error, setError] = useState('');
 
-  const addSection = () => {
-    const newId = sections.length > 0 ? Math.max(...sections.map(s => s.id)) + 1 : 1;
-    setSections([...sections, { 
-      id: newId, 
-      title: `Section ${newId}`, 
-      description: '', 
-      dateRange: '', 
-      budget: '',
-      isCompleted: false 
-    }]);
-  };
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }));
 
-  const completeSection = (id) => {
-    setSections(sections.map(s => s.id === id ? { ...s, isCompleted: true } : s));
-  };
+  useEffect(() => {
+    setFormData((current) => ({
+      ...current,
+      arriveDate: trip?.startDate?.slice(0, 10) || '',
+      departDate: trip?.endDate?.slice(0, 10) || ''
+    }));
+  }, [trip]);
 
-  const editSection = (id) => {
-    setSections(sections.map(s => s.id === id ? { ...s, isCompleted: false } : s));
-  };
-
-  const removeSection = (id) => {
-    if (sections.length > 1) {
-      setSections(sections.filter(s => s.id !== id));
+  useEffect(() => {
+    if (!trip?.stops?.length) {
+      return;
     }
+
+    setSelectedDateByStop((current) => {
+      const next = { ...current };
+      trip.stops.forEach((stop) => {
+        if (!next[stop.id]) {
+          next[stop.id] = stop.arriveDate?.slice(0, 10) || '';
+        }
+      });
+      return next;
+    });
+  }, [trip]);
+
+  const orderedStopIds = useMemo(() => (trip?.stops || []).map((stop) => stop.id), [trip]);
+
+  const searchCities = async (value) => {
+    setCitySearch(value);
+    if (value.trim().length < 2) {
+      setCityResults([]);
+      return;
+    }
+
+    const response = await citiesApi.list({ search: value, limit: 6 });
+    setCityResults(response.data || []);
   };
 
-  const updateSection = (id, field, value) => {
-    setSections(sections.map(s => s.id === id ? { ...s, [field]: value } : s));
+  const refreshTrip = async () => {
+    const refreshed = await tripsApi.get(tripId);
+    setTrip(refreshed.data);
+  };
+
+  const addStop = async () => {
+    if (!tripId || !formData.cityId) {
+      setError('Select a city to add a stop.');
+      return;
+    }
+
+    await tripsApi.addStop(tripId, {
+      cityId: formData.cityId,
+      arriveDate: formData.arriveDate,
+      departDate: formData.departDate,
+      orderIndex: (trip?.stops?.length || 0) * 10 + 10
+    });
+
+    await refreshTrip();
+    setCitySearch('');
+    setCityResults([]);
+    setFormData((current) => ({ ...current, cityId: '' }));
+    setError('');
+  };
+
+  const deleteStop = async (stopId) => {
+    await tripsApi.removeStop(tripId, stopId);
+    await refreshTrip();
+  };
+
+  const handleStopDragEnd = async (event) => {
+    const { active, over } = event;
+
+    if (!over || active.id === over.id || !trip?.stops?.length) {
+      return;
+    }
+
+    const currentStops = [...trip.stops];
+    const oldIndex = currentStops.findIndex((stop) => stop.id === active.id);
+    const newIndex = currentStops.findIndex((stop) => stop.id === over.id);
+    const reorderedStops = arrayMove(currentStops, oldIndex, newIndex);
+
+    setTrip({
+      ...trip,
+      stops: reorderedStops.map((stop, index) => ({
+        ...stop,
+        orderIndex: (index + 1) * 10
+      }))
+    });
+
+    await tripsApi.reorderStops(
+      tripId,
+      reorderedStops.map((stop, index) => ({
+        stopId: stop.id,
+        orderIndex: (index + 1) * 10
+      }))
+    );
+
+    await refreshTrip();
+  };
+
+  const searchActivitiesForStop = async (stop, value) => {
+    setActivitySearchByStop((current) => ({ ...current, [stop.id]: value }));
+
+    if (value.trim().length < 1) {
+      setActivityResultsByStop((current) => ({ ...current, [stop.id]: [] }));
+      return;
+    }
+
+    const response = await activitiesApi.list({ cityId: stop.cityId, limit: 20 });
+    const filtered = (response.data || []).filter((activity) =>
+      activity.name.toLowerCase().includes(value.toLowerCase())
+    );
+    setActivityResultsByStop((current) => ({ ...current, [stop.id]: filtered }));
+  };
+
+  const addActivityToStop = async (stop, activity) => {
+    const scheduledDate = selectedDateByStop[stop.id] || stop.arriveDate?.slice(0, 10);
+
+    await tripsApi.addStopActivity(tripId, stop.id, {
+      activityId: activity.id,
+      scheduledDate,
+      orderIndex: (stop.activities?.length || 0) * 10 + 10
+    });
+
+    await refreshTrip();
+  };
+
+  const deleteActivityFromStop = async (stopId, stopActivityId) => {
+    await tripsApi.deleteStopActivity(tripId, stopId, stopActivityId);
+    await refreshTrip();
   };
 
   return (
-    <div className="max-w-4xl mx-auto space-y-12 pb-20">
+    <div className="max-w-5xl mx-auto space-y-12 pb-20">
       <header className="flex flex-col items-center text-center space-y-4">
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="space-y-1 flex flex-col items-center"
-        >
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="space-y-1 flex flex-col items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-brand-navy flex items-center justify-center text-white shadow-lg">
               <Layout size={20} />
             </div>
             <h2 className="text-3xl font-black text-brand-navy tracking-tighter uppercase">Itinerary Builder</h2>
           </div>
-          <p className="text-brand-slate text-sm font-medium">Create a structured plan for your next big adventure.</p>
+          <p className="text-brand-slate text-sm font-medium">
+            {trip?.name || 'Create a structured plan for your next big adventure.'}
+          </p>
         </motion.div>
       </header>
 
-      <div className="space-y-10">
-        <AnimatePresence mode="popLayout">
-          {sections.map((section, index) => (
-            <motion.div
-              key={section.id}
-              layout
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95 }}
-              transition={{ type: "spring", stiffness: 300, damping: 25 }}
-            >
-              {section.isCompleted ? (
-                /* Completed Card View */
-                <Link to="/trips/1/view" className="block cursor-pointer">
-                  <GlassCard className="p-8 space-y-6 !rounded-[40px] border-brand-navy/10 bg-white shadow-xl relative group overflow-hidden transition-all hover:scale-[1.02] active:scale-[0.98]" hover={false}>
-                    <div className="absolute top-0 left-0 w-2 h-full bg-brand-navy" />
-                    
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <h3 className="text-2xl font-black text-brand-navy uppercase tracking-tighter">
-                          {section.title}:
-                        </h3>
-                        <p className="text-brand-slate font-medium leading-relaxed italic">
-                          {section.description || 'No information provided for this section.'}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); editSection(section.id); }} 
-                          className="p-2 rounded-xl hover:bg-brand-navy hover:text-white transition-all cursor-pointer text-brand-slate z-10"
-                        >
-                          <Edit3 size={18} />
-                        </button>
-                        <button 
-                          onClick={(e) => { e.preventDefault(); e.stopPropagation(); removeSection(section.id); }} 
-                          className="p-2 rounded-xl hover:bg-red-500 hover:text-white transition-all cursor-pointer text-brand-slate z-10"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </div>
-                    </div>
+      {tripLoading ? <div className="text-brand-navy font-black uppercase tracking-widest">Loading selected trip...</div> : null}
+      {tripError ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-500">{tripError}</div> : null}
+      {error ? <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm font-bold text-red-500">{error}</div> : null}
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-                      <div className="bg-brand-navy/5 border border-brand-navy/10 p-5 rounded-[24px] flex items-center gap-4">
-                        <Calendar size={20} className="text-brand-navy opacity-40" />
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-brand-navy opacity-40">Date Range</p>
-                          <p className="font-bold text-brand-navy">{section.dateRange || 'TBD'}</p>
-                        </div>
-                      </div>
-                      <div className="bg-brand-navy/5 border border-brand-navy/10 p-5 rounded-[24px] flex items-center gap-4">
-                        <DollarSign size={20} className="text-brand-navy opacity-40" />
-                        <div>
-                          <p className="text-[10px] font-black uppercase tracking-widest text-brand-navy opacity-40">Budget</p>
-                          <p className="font-bold text-brand-navy">{section.budget || 'TBD'}</p>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Hint for interaction */}
-                    <div className="absolute bottom-4 right-8 flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <span className="text-[9px] font-black text-brand-indigo uppercase tracking-widest">View Details</span>
-                      <ChevronRight size={14} className="text-brand-indigo" />
-                    </div>
-                  </GlassCard>
-                </Link>
-              ) : (
-                /* Active Card View */
-                <GlassCard className="p-8 space-y-6 !rounded-[40px] border-white bg-white shadow-2xl shadow-brand-navy/5 relative group" hover={false}>
-                  <div className="space-y-4">
-                    <h3 className="text-2xl font-black text-brand-navy uppercase tracking-tighter">
-                      {section.title}:
-                    </h3>
-                    
-                    <textarea 
-                      placeholder="All the necessary information about this section. This can be anything like travel section, hotel or any other activity..."
-                      className="w-full bg-brand-navy/[0.02] border-2 border-brand-navy/5 rounded-[24px] py-4 px-6 text-brand-navy font-medium placeholder:text-brand-slate/40 focus:outline-none focus:border-brand-navy/20 transition-all resize-none h-28 leading-relaxed"
-                      value={section.description}
-                      onChange={(e) => updateSection(section.id, 'description', e.target.value)}
-                    />
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="relative group cursor-pointer" onClick={(e) => e.currentTarget.querySelector('input').showPicker()}>
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-3 text-brand-navy/40 transition-colors pointer-events-none">
-                        <Calendar size={18} />
-                      </div>
-                      <input 
-                        type="date" 
-                        placeholder="Date Range"
-                        className="w-full bg-white border-2 border-brand-navy/5 rounded-[24px] py-6 pl-16 pr-6 text-brand-navy font-bold focus:outline-none focus:border-brand-navy/20 transition-all shadow-sm cursor-pointer"
-                        value={section.dateRange}
-                        onChange={(e) => updateSection(section.id, 'dateRange', e.target.value)}
-                      />
-                    </div>
-
-                    <div className="relative group">
-                      <div className="absolute left-6 top-1/2 -translate-y-1/2 flex items-center gap-3 text-brand-navy/40 transition-colors pointer-events-none">
-                        <DollarSign size={18} />
-                      </div>
-                      <input 
-                        type="text" 
-                        placeholder="Budget of this section"
-                        className="w-full bg-white border-2 border-brand-navy/5 rounded-[24px] py-6 pl-16 pr-6 text-brand-navy font-bold focus:outline-none focus:border-brand-navy/20 transition-all shadow-sm"
-                        value={section.budget}
-                        onChange={(e) => updateSection(section.id, 'budget', e.target.value)}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between pt-4">
-                    <motion.button
-                      whileHover={{ scale: 1.05, x: 2 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => completeSection(section.id)}
-                      className="flex items-center gap-2 text-brand-navy hover:text-brand-indigo transition-colors cursor-pointer group/btn font-black text-[10px] uppercase tracking-widest"
-                    >
-                      <PlusCircle size={18} className="group-hover/btn:scale-110 transition-transform" />
-                      Add Section
-                    </motion.button>
-
-                    {sections.length > 1 && (
-                      <motion.button
-                        whileHover={{ scale: 1.1, rotate: 5 }}
-                        whileTap={{ scale: 0.9 }}
-                        onClick={() => removeSection(section.id)}
-                        className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center hover:bg-red-100 transition-all cursor-pointer shadow-sm border border-red-100"
-                      >
-                        <Trash2 size={18} />
-                      </motion.button>
-                    )}
-                  </div>
-                </GlassCard>
-              )}
-            </motion.div>
-          ))}
-        </AnimatePresence>
-
-        <motion.button
-          whileHover={{ scale: 1.02, y: -4 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={addSection}
-          className="w-full py-8 rounded-[40px] border-4 border-dashed border-brand-navy/5 text-brand-slate hover:border-brand-navy/20 hover:text-brand-navy hover:bg-brand-navy/[0.02] transition-all flex flex-col items-center justify-center gap-3 cursor-pointer group"
-        >
-          <div className="w-12 h-12 rounded-full bg-white shadow-lg flex items-center justify-center group-hover:bg-brand-navy group-hover:text-white transition-all">
-            <Plus size={24} />
+      {trip ? (
+        <GlassCard className="p-8 space-y-6 !rounded-[40px] border-white bg-white shadow-2xl shadow-brand-navy/5" hover={false}>
+          <div className="space-y-2">
+            <h3 className="text-2xl font-black text-brand-navy uppercase tracking-tighter">{trip.name}</h3>
+            <p className="text-brand-slate font-medium">{formatDateRange(trip.startDate, trip.endDate)}</p>
           </div>
-          <span className="text-[11px] font-black uppercase tracking-[0.3em]">Add another Section</span>
-        </motion.button>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-3 space-y-2">
+              <label className="text-[10px] font-black text-brand-navy uppercase tracking-[0.2em] ml-1">City</label>
+              <div className="relative">
+                <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-brand-slate" size={18} />
+                <input
+                  value={citySearch}
+                  onChange={(event) => searchCities(event.target.value)}
+                  placeholder="Search a city..."
+                  className="w-full bg-white border-2 border-brand-navy/5 rounded-[24px] py-5 pl-12 pr-6 text-brand-navy font-bold focus:outline-none focus:border-brand-sky/30 transition-all shadow-sm"
+                />
+              </div>
+              {cityResults.length ? (
+                <div className="grid gap-2">
+                  {cityResults.map((city) => (
+                    <button
+                      key={city.id}
+                      onClick={() => {
+                        setFormData((current) => ({ ...current, cityId: city.id }));
+                        setCitySearch(`${city.name}, ${city.country}`);
+                        setCityResults([]);
+                      }}
+                      className="rounded-2xl border border-brand-navy/10 bg-white px-4 py-3 text-left text-sm font-bold text-brand-navy hover:border-brand-sky/30"
+                    >
+                      {city.name}, {city.country}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <label className="text-[10px] font-black text-brand-navy uppercase tracking-[0.2em] ml-1">Arrive Date</label>
+              <input
+                type="date"
+                value={formData.arriveDate}
+                onChange={(event) => setFormData((current) => ({ ...current, arriveDate: event.target.value }))}
+                className="w-full bg-white border-2 border-brand-navy/5 rounded-[24px] py-5 px-6 text-brand-navy font-bold focus:outline-none focus:border-brand-sky/30 transition-all shadow-sm"
+              />
+            </div>
+            <div>
+              <label className="text-[10px] font-black text-brand-navy uppercase tracking-[0.2em] ml-1">Depart Date</label>
+              <input
+                type="date"
+                value={formData.departDate}
+                onChange={(event) => setFormData((current) => ({ ...current, departDate: event.target.value }))}
+                className="w-full bg-white border-2 border-brand-navy/5 rounded-[24px] py-5 px-6 text-brand-navy font-bold focus:outline-none focus:border-brand-sky/30 transition-all shadow-sm"
+              />
+            </div>
+            <div className="flex items-end">
+              <AnimatedButton onClick={addStop} className="w-full py-5 rounded-[24px] bg-brand-navy text-white font-black uppercase tracking-[0.3em] text-[12px] shadow-2xl shadow-brand-navy/20">
+                <Plus size={18} />
+                Add Stop
+              </AnimatedButton>
+            </div>
+          </div>
+        </GlassCard>
+      ) : null}
+
+      <div className="space-y-4">
+        <p className="text-[10px] font-black uppercase tracking-[0.25em] text-brand-slate">
+          Drag stops to reorder your cities and assign activities inline
+        </p>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleStopDragEnd}>
+          <SortableContext items={orderedStopIds} strategy={verticalListSortingStrategy}>
+            <div className="space-y-6">
+              {trip?.stops?.map((stop) => (
+                <SortableStopCard
+                  key={stop.id}
+                  stop={stop}
+                  selectedDate={selectedDateByStop[stop.id]}
+                  activitySearch={activitySearchByStop[stop.id] || ''}
+                  activityResults={activityResultsByStop[stop.id] || []}
+                  onDateChange={(stopId, date) =>
+                    setSelectedDateByStop((current) => ({ ...current, [stopId]: date }))
+                  }
+                  onSearchChange={searchActivitiesForStop}
+                  onAddActivity={addActivityToStop}
+                  onDeleteActivity={deleteActivityFromStop}
+                  onDeleteStop={deleteStop}
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       </div>
     </div>
   );

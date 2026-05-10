@@ -9,7 +9,8 @@
     "prisma:generate": "prisma generate",
     "test": "vitest run",
     "test:db": "node tests/db-connection-check.js",
-    "test:api": "vitest run tests/api.integration.test.mjs"
+    "test:api": "vitest run tests/api.integration.test.mjs",
+    "test:seed": "vitest run tests/seed.integration.test.mjs"
   },
   "keywords": [
     "traveloop",

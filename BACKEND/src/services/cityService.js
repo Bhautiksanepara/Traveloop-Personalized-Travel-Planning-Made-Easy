@@ -26,6 +26,15 @@ const buildCityWhere = (query) => {
 const listCities = async (query) => {
   const { page, limit, skip } = getPagination(query);
   const where = buildCityWhere(query);
+  const sortFieldMap = {
+    popularity: "popularityScore",
+    cost: "costIndex",
+    name: "name",
+    country: "country"
+  };
+  const orderBy = {
+    [sortFieldMap[query.sortBy] || "popularityScore"]: query.sortOrder || "desc"
+  };
 
   const [total, items] = await Promise.all([
     prisma.city.count({ where }),
@@ -33,9 +42,7 @@ const listCities = async (query) => {
       where,
       skip,
       take: limit,
-      orderBy: {
-        popularityScore: "desc"
-      }
+      orderBy
     })
   ]);
 

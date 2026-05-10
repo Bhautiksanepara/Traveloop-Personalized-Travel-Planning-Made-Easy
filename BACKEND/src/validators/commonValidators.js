@@ -1,7 +1,11 @@
 const { z } = require("zod");
 
+const idSchema = z
+  .string()
+  .regex(/^[A-Za-z0-9-]{36}$/, "Invalid id format.");
+
 const uuidParamSchema = z.object({
-  id: z.string().uuid()
+  id: idSchema
 });
 
 const paginationSchema = z.object({
@@ -13,6 +17,7 @@ const paginationSchema = z.object({
 
 module.exports = {
   z,
+  idSchema,
   uuidParamSchema,
   paginationSchema
 };
